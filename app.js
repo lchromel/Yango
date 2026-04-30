@@ -1,45 +1,12 @@
-const PRESET_COLORS = [
-  { label: "Black", hex: "#000000" },
-  { label: "White", hex: "#e5e5e5" },
-  { label: "Silver", hex: "#bdbdbd" },
-  { label: "Dark Silver", hex: "#98a3bd" },
-  { label: "Red", hex: "#c40606" },
-  { label: "Custom", hex: "#97a56e", custom: true },
-];
-
-const ANGLE_PRESETS = [
-  { label: "Front 3/4" },
-  { label: "Rear 3/4" },
-  { label: "Front 3/4 Low Angle" },
-  { label: "Rear 3/4 Low Angle" },
-  { label: "Clean Side Profile" },
-  { label: "Centered Front Shot" },
-  { label: "Rear Light Hero Shot" },
-  { label: "Dynamic Tracking Shot" },
-];
-
-const CUSTOM_CAR_OPTION = "__custom__";
-const TOP_RENTAL_CARS_DUBAI = [
-  "Nissan Patrol",
-  "Toyota Land Cruiser Prado",
-  "Toyota Land Cruiser",
-  "Nissan Sunny",
-  "Nissan Altima",
-  "Nissan X-Trail",
-  "Toyota Camry",
-  "Kia Sportage",
-  "Hyundai Creta",
-  "Mitsubishi Pajero",
-  "Range Rover Sport",
-  "Mercedes-Benz G63 AMG",
-  "Mercedes-Benz C200",
-  "BMW 5 Series",
-  "BMW M4",
-  "Porsche 911",
-  "Porsche Cayenne",
-  "Ford Mustang",
-  "Chevrolet Camaro",
-  "Lamborghini Huracan",
+const VEHICLE_DATA_URL = "./assets/data/vehicles.json";
+const IMAGE_SERVICE = "Ride-hailing";
+const IMAGE_STYLE = "Photo";
+const COMPOSITION_PRESETS = [
+  { label: "inside the car", vehicleTypes: ["car"] },
+  { label: "near the car", vehicleTypes: ["car", "moto", "tuktuk"] },
+  { label: "getting into the car", vehicleTypes: ["car"] },
+  { label: "passenger with driver", vehicleTypes: ["car", "moto", "tuktuk"] },
+  { label: "car driving", vehicleTypes: ["car"] },
 ];
 
 const BANNER_LAYOUTS = [
@@ -75,13 +42,16 @@ const ACCENT_PRESET_VALUES = {
 };
 
 const state = {
-  selectedCarModel: "",
-  customCarModel: "",
-  carMenuOpen: false,
-  colorHex: "#e5e5e5",
-  colorLabel: "White",
-  selectedPreset: "White",
-  selectedAngle: "Front 3/4",
+  vehicleData: [],
+  vehicleDataLoading: false,
+  vehicleDataError: "",
+  selectedCountry: "",
+  selectedTransportLabel: "",
+  countryMenuOpen: false,
+  transportMenuOpen: false,
+  selectedComposition: "",
+  heroDescription: "",
+  situationDescription: "",
   basePromptText: "",
   editPromptText: "",
   editSuggestions: [],
@@ -147,16 +117,18 @@ const imageCanvasEl = document.getElementById("imageCanvas");
 const bannerCanvasEl = document.getElementById("bannerCanvas");
 const videoCanvasEl = document.getElementById("videoCanvas");
 
-const carModelToggleEl = document.getElementById("carModelToggle");
-const carModelDisplayEl = document.getElementById("carModelDisplay");
-const carModelChevronIconEl = document.getElementById("carModelChevronIcon");
-const carModelMenuEl = document.getElementById("carModelMenu");
-const carModelCustomWrapEl = document.getElementById("carModelCustomWrap");
-const carModelCustomInputEl = document.getElementById("carModelCustomInput");
-const colorNameEl = document.getElementById("colorName");
-const presetColorsEl = document.getElementById("presetColors");
-const angleRowEl = document.getElementById("angleRow");
-const customColorInput = document.getElementById("customColorInput");
+const countryToggleEl = document.getElementById("countryToggle");
+const countryDisplayEl = document.getElementById("countryDisplay");
+const countryChevronIconEl = document.getElementById("countryChevronIcon");
+const countryMenuEl = document.getElementById("countryMenu");
+const transportToggleEl = document.getElementById("transportToggle");
+const transportDisplayEl = document.getElementById("transportDisplay");
+const transportChevronIconEl = document.getElementById("transportChevronIcon");
+const transportMenuEl = document.getElementById("transportMenu");
+const compositionSectionEl = document.getElementById("compositionSection");
+const compositionRowEl = document.getElementById("compositionRow");
+const heroDescriptionInputEl = document.getElementById("heroDescriptionInput");
+const situationDescriptionInputEl = document.getElementById("situationDescriptionInput");
 const bannerAccentColorInput = document.getElementById("bannerAccentColorInput");
 const generateBtn = document.getElementById("generateBtn");
 
@@ -306,10 +278,24 @@ function setSourceStatusForImage(record) {
 }
 
 function getCurrentCarModel() {
-  if (state.selectedCarModel === CUSTOM_CAR_OPTION) {
-    return state.customCarModel.trim();
-  }
-  return state.selectedCarModel.trim();
+  return getSelectedTransport()?.model?.trim() || "";
+}
+
+function getSelectedCountryRecord() {
+  return state.vehicleData.find((item) => item.country === state.selectedCountry) || null;
+}
+
+function getTransportOptions() {
+  return getSelectedCountryRecord()?.tariffs || [];
+}
+
+function getSelectedTransport() {
+  return getTransportOptions().find((item) => item.label === state.selectedTransportLabel) || null;
+}
+
+function getAvailableCompositions() {
+  const vehicleType = getSelectedTransport()?.vehicleType || "car";
+  return COMPOSITION_PRESETS.filter((item) => item.vehicleTypes.includes(vehicleType));
 }
 
 function applySelectedImage(record, options = {}) {
@@ -591,47 +577,123 @@ async function fetchVideoLibrary() {
   }
 }
 
-function renderCarModelControl() {
-  const selectedLabel =
-    state.selectedCarModel === CUSTOM_CAR_OPTION
-      ? "Enter your own"
-      : state.selectedCarModel || "Select a car model";
-  carModelDisplayEl.textContent = selectedLabel;
+async function fetchVehicleData() {
+  state.vehicleDataLoading = true;
+  state.vehicleDataError = "";
+  renderImageControls();
+  renderUiState();
+  try {
+    const response = await fetch(VEHICLE_DATA_URL, {
+      credentials: "same-origin",
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error("Failed to load vehicle data");
+    }
+    state.vehicleData = Array.isArray(payload.countries)
+      ? payload.countries
+          .map((country) => ({
+            country: String(country.country || "").trim(),
+            tariffs: Array.isArray(country.tariffs)
+              ? country.tariffs
+                  .map((tariff) => ({
+                    label: String(tariff.label || "").trim(),
+                    basicClass: String(tariff.basicClass || "").trim(),
+                    tariffCode: String(tariff.tariffCode || "").trim(),
+                    model: String(tariff.model || "").trim(),
+                    vehicleType: String(tariff.vehicleType || "car").trim() || "car",
+                    orders: Number(tariff.orders || 0),
+                  }))
+                  .filter((tariff) => tariff.label && tariff.model)
+              : [],
+          }))
+          .filter((country) => country.country && country.tariffs.length)
+      : [];
+  } catch (error) {
+    console.error(error);
+    state.vehicleDataError = error.message || "Failed to load vehicle data";
+  } finally {
+    state.vehicleDataLoading = false;
+    renderImageControls();
+    renderUiState();
+  }
+}
 
-  carModelToggleEl.setAttribute("aria-expanded", state.carMenuOpen ? "true" : "false");
-  if (carModelChevronIconEl) {
-    carModelChevronIconEl.src = state.carMenuOpen
+function renderSelectOption(menuEl, item, isActive, onClick) {
+  const option = document.createElement("button");
+  option.type = "button";
+  option.className = "select-option";
+  option.textContent = item.label;
+  if (isActive) {
+    option.classList.add("is-active");
+  }
+  option.addEventListener("click", onClick);
+  menuEl.appendChild(option);
+}
+
+function renderCountryControl() {
+  if (!countryDisplayEl || !countryToggleEl || !countryMenuEl) return;
+  countryDisplayEl.textContent = state.vehicleDataError
+    ? "Countries unavailable"
+    : state.selectedCountry || (state.vehicleDataLoading ? "Loading countries" : "Select a country");
+  countryToggleEl.disabled = state.vehicleDataLoading || Boolean(state.vehicleDataError);
+  countryToggleEl.setAttribute("aria-expanded", state.countryMenuOpen ? "true" : "false");
+  if (countryChevronIconEl) {
+    countryChevronIconEl.src = state.countryMenuOpen
       ? "./assets/icons/ChevronUpM.svg"
       : "./assets/icons/ChevronDownM.svg";
   }
-  carModelMenuEl.classList.toggle("hidden", !state.carMenuOpen);
-  carModelCustomWrapEl.classList.toggle("hidden", state.selectedCarModel !== CUSTOM_CAR_OPTION);
-  if (state.selectedCarModel === CUSTOM_CAR_OPTION) {
-    carModelCustomInputEl.value = state.customCarModel;
-  }
-
-  carModelMenuEl.innerHTML = "";
-  const items = [
-    { label: "Enter your own", value: CUSTOM_CAR_OPTION },
-    ...TOP_RENTAL_CARS_DUBAI.map((model) => ({ label: model, value: model })),
-  ];
-  items.forEach((item) => {
-    const option = document.createElement("button");
-    option.type = "button";
-    option.className = "car-model-option";
-    option.textContent = item.label;
-    if (state.selectedCarModel === item.value) {
-      option.classList.add("is-active");
-    }
-    option.addEventListener("click", () => {
-      state.selectedCarModel = item.value;
-      state.carMenuOpen = false;
-      renderCarModelControl();
-      if (item.value === CUSTOM_CAR_OPTION) {
-        setTimeout(() => carModelCustomInputEl.focus(), 0);
+  countryMenuEl.classList.toggle("hidden", !state.countryMenuOpen);
+  countryMenuEl.innerHTML = "";
+  state.vehicleData.forEach((country) => {
+    renderSelectOption(
+      countryMenuEl,
+      { label: country.country },
+      state.selectedCountry === country.country,
+      () => {
+        state.selectedCountry = country.country;
+        state.selectedTransportLabel = "";
+        state.selectedComposition = "";
+        state.countryMenuOpen = false;
+        state.transportMenuOpen = false;
+        renderImageControls();
+        renderUiState();
       }
-    });
-    carModelMenuEl.appendChild(option);
+    );
+  });
+}
+
+function renderTransportControl() {
+  if (!transportDisplayEl || !transportToggleEl || !transportMenuEl) return;
+  const selected = getSelectedTransport();
+  transportDisplayEl.textContent = selected
+    ? selected.label
+    : state.selectedCountry
+      ? "Select a vehicle"
+      : "Select a country first";
+  transportToggleEl.disabled = !state.selectedCountry;
+  transportToggleEl.setAttribute("aria-expanded", state.transportMenuOpen ? "true" : "false");
+  if (transportChevronIconEl) {
+    transportChevronIconEl.src = state.transportMenuOpen
+      ? "./assets/icons/ChevronUpM.svg"
+      : "./assets/icons/ChevronDownM.svg";
+  }
+  transportMenuEl.classList.toggle("hidden", !state.transportMenuOpen);
+  transportMenuEl.innerHTML = "";
+  getTransportOptions().forEach((transport) => {
+    renderSelectOption(
+      transportMenuEl,
+      { label: transport.label },
+      state.selectedTransportLabel === transport.label,
+      () => {
+        state.selectedTransportLabel = transport.label;
+        state.transportMenuOpen = false;
+        const available = getAvailableCompositions();
+        state.selectedComposition = available[0]?.label || "";
+        renderImageControls();
+        renderUiState();
+      }
+    );
   });
 }
 
@@ -710,7 +772,7 @@ function renderUiState() {
       loaderLabelEl.textContent = "Working";
     }
   }
-  generateBtn.disabled = state.generating;
+  generateBtn.disabled = state.generating || !state.selectedCountry || !getSelectedTransport();
   renderBannersBtn.disabled = state.bannerRendering || !state.bannerSourceImageUrl;
   if (generateVideoBtnEl) {
     const selectedSavedVideo = findLibraryVideoByUrl(state.videoResultUrl);
@@ -721,8 +783,10 @@ function renderUiState() {
   }
   renderTabs();
   renderTopAction();
-  imagePreviewFrameEl.classList.toggle("hidden", !state.imageUrl);
+  renderImageControls();
+  imagePreviewFrameEl.classList.remove("hidden");
   resultImageEl.src = state.imageUrl || "";
+  resultImageEl.classList.toggle("hidden", !state.imageUrl);
   promptRowEl.classList.toggle("hidden", !state.imageUrl);
   if (promptBackBtn) {
     promptBackBtn.disabled = state.generating || !state.imageHistory.length;
@@ -798,58 +862,36 @@ function renderPromptSuggestions() {
   });
 }
 
-function renderColors() {
-  presetColorsEl.innerHTML = "";
-  PRESET_COLORS.forEach((preset) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "swatch";
-    if (preset.custom) btn.classList.add("is-picker");
-    if (state.selectedPreset === preset.label) btn.classList.add("is-active");
+function renderCompositions() {
+  if (!compositionSectionEl || !compositionRowEl) return;
+  const selectedTransport = getSelectedTransport();
+  compositionSectionEl.classList.toggle("hidden", !selectedTransport);
+  compositionRowEl.innerHTML = "";
+  if (!selectedTransport) return;
 
-    const core = document.createElement("div");
-    core.className = "swatch-core";
-    if (!preset.custom) {
-      core.style.background = preset.hex;
-    }
-    btn.appendChild(core);
-    if (preset.custom) {
-      const glyph = document.createElement("span");
-      glyph.className = "swatch-picker-glyph";
-      glyph.textContent = "⌄";
-      btn.appendChild(glyph);
-    }
+  const available = getAvailableCompositions();
+  if (!available.some((item) => item.label === state.selectedComposition)) {
+    state.selectedComposition = available[0]?.label || "";
+  }
 
-    btn.addEventListener("click", () => {
-      if (preset.custom) {
-        customColorInput.click();
-        return;
-      }
-      state.colorHex = preset.hex;
-      state.colorLabel = preset.label;
-      state.selectedPreset = preset.label;
-      colorNameEl.textContent = state.colorLabel;
-      renderColors();
-    });
-
-    presetColorsEl.appendChild(btn);
-  });
-}
-
-function renderAngles() {
-  angleRowEl.innerHTML = "";
-  ANGLE_PRESETS.forEach((preset) => {
+  available.forEach((preset) => {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "angle-chip";
     chip.textContent = preset.label;
-    if (state.selectedAngle === preset.label) chip.classList.add("is-active");
+    if (state.selectedComposition === preset.label) chip.classList.add("is-active");
     chip.addEventListener("click", () => {
-      state.selectedAngle = preset.label;
-      renderAngles();
+      state.selectedComposition = preset.label;
+      renderCompositions();
     });
-    angleRowEl.appendChild(chip);
+    compositionRowEl.appendChild(chip);
   });
+}
+
+function renderImageControls() {
+  renderCountryControl();
+  renderTransportControl();
+  renderCompositions();
 }
 
 function renderLayoutTypes() {
@@ -1347,11 +1389,16 @@ async function uploadCustomVideo(file) {
 }
 
 async function generatePrompt() {
-  const currentCarModel = getCurrentCarModel();
-  if (!currentCarModel) {
-    alert("PLEASE ENTER CAR MODEL");
+  const selectedTransport = getSelectedTransport();
+  if (!state.selectedCountry) {
+    alert("PLEASE SELECT COUNTRY");
     return;
   }
+  if (!selectedTransport) {
+    alert("PLEASE SELECT VEHICLE");
+    return;
+  }
+  const currentCarModel = selectedTransport.model;
 
   const previousImageUrl = state.imageUrl;
   state.generating = true;
@@ -1374,10 +1421,18 @@ async function generatePrompt() {
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        service: IMAGE_SERVICE,
+        style: IMAGE_STYLE,
+        country: state.selectedCountry,
+        transportLabel: selectedTransport.label,
+        transportCode: selectedTransport.tariffCode,
+        basicClass: selectedTransport.basicClass,
+        vehicleModel: selectedTransport.model,
+        vehicleType: selectedTransport.vehicleType,
+        composition: state.selectedComposition,
+        modelDescription: state.heroDescription,
+        situationDescription: state.situationDescription,
         carModel: currentCarModel,
-        colorHex: state.colorHex,
-        colorName: state.colorLabel,
-        preferredAngle: state.selectedAngle,
       }),
     });
     const payload = await response.json();
@@ -1503,7 +1558,7 @@ async function generateVideoPrompt() {
     return;
   }
   if (!currentCarModel) {
-    alert("PLEASE ENTER CAR MODEL");
+    alert("PLEASE SELECT VEHICLE");
     return;
   }
 
@@ -1518,7 +1573,7 @@ async function generateVideoPrompt() {
       body: JSON.stringify({
         imageUrl: state.imageUrl,
         carModel: currentCarModel,
-        colorName: state.colorLabel,
+        colorName: "",
         basePrompt: state.basePromptText,
       }),
     });
@@ -1651,36 +1706,44 @@ if (tabVideoEl) {
   tabVideoEl.addEventListener("click", () => setActiveTab("video"));
 }
 
-carModelToggleEl.addEventListener("click", () => {
-  state.carMenuOpen = !state.carMenuOpen;
-  renderCarModelControl();
+countryToggleEl.addEventListener("click", () => {
+  state.countryMenuOpen = !state.countryMenuOpen;
+  state.transportMenuOpen = false;
+  renderImageControls();
 });
 
-carModelCustomInputEl.addEventListener("input", (event) => {
-  state.customCarModel = event.target.value;
+transportToggleEl.addEventListener("click", () => {
+  if (!state.selectedCountry) return;
+  state.transportMenuOpen = !state.transportMenuOpen;
+  state.countryMenuOpen = false;
+  renderImageControls();
 });
 
 document.addEventListener("click", (event) => {
-  if (!carModelToggleEl || !carModelMenuEl || !carModelCustomWrapEl) return;
+  if (!countryToggleEl || !countryMenuEl || !transportToggleEl || !transportMenuEl) return;
   const target = event.target;
   if (
     target instanceof Node &&
-    (carModelToggleEl.contains(target) || carModelMenuEl.contains(target) || carModelCustomWrapEl.contains(target))
+    (countryToggleEl.contains(target) ||
+      countryMenuEl.contains(target) ||
+      transportToggleEl.contains(target) ||
+      transportMenuEl.contains(target))
   ) {
     return;
   }
-  if (state.carMenuOpen) {
-    state.carMenuOpen = false;
-    renderCarModelControl();
+  if (state.countryMenuOpen || state.transportMenuOpen) {
+    state.countryMenuOpen = false;
+    state.transportMenuOpen = false;
+    renderImageControls();
   }
 });
 
-customColorInput.addEventListener("input", (event) => {
-  state.colorHex = event.target.value;
-  state.colorLabel = "Custom";
-  state.selectedPreset = "Custom";
-  colorNameEl.textContent = state.colorLabel;
-  renderColors();
+heroDescriptionInputEl.addEventListener("input", (event) => {
+  state.heroDescription = event.target.value;
+});
+
+situationDescriptionInputEl.addEventListener("input", (event) => {
+  state.situationDescription = event.target.value;
 });
 
 if (bannerAccentColorInput) {
@@ -1967,18 +2030,16 @@ if (clearSourceBtnEl) {
   });
 }
 
-colorNameEl.textContent = state.colorLabel;
 promptInputEl.value = state.editPromptText;
 setSourceStatus("none");
-renderCarModelControl();
-renderColors();
-renderAngles();
+renderImageControls();
 renderLayoutTypes();
 renderShiftControls();
 renderTextSetsEditor();
 renderBannerSetsView();
 renderPromptSuggestions();
 renderUiState();
+fetchVehicleData();
 fetchImageLibrary();
 fetchVideoLibrary();
 

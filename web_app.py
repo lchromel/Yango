@@ -134,6 +134,61 @@ CENTER_BADGE_SPACING_LOCK_BY_SIZE = {
     "1080x1920": 24,
 }
 
+SUPER_APP_VISUAL_GUIDE = """
+Urban Fashion x Documentary Realism for ride-hailing performance visuals.
+- Always write the final prompt in English and return only the prompt text.
+- The result must be a believable commercial photo shoot, not an illustration.
+- Use one or two main characters only, with one clear scenario-driven action.
+- Characters should look local to the selected country unless the situation explicitly requires otherwise.
+- No posing and no eye contact with the camera.
+- Fashion should be bold, confident, modern global street fashion, with clothing matching the country climate and scenario time of day.
+- No traditional, ethnic, folkloric, ceremonial clothing, and no ethnic patterns.
+- If a phone appears, it must be red. Do not mention phone brand, model, or interface.
+- Exterior locations must be described through architecture and nearby surfaces, not generic labels like street, alley, road, market, or sidewalk.
+- Exterior spaces need a building surface, a transition element, and maintained lived-in details.
+- Background people, if present, must be turned away, in profile, blurred, or cropped, never staring at the main characters.
+- Use warm color grading, natural light or flash, texture-focused realism, and cropped asymmetrical composition.
+- Do not show logos, branding, app UI, watermarks, or text.
+"""
+
+COMPOSITION_RULES = {
+    "inside the car": (
+        "Interior car POV from the driver's seat, passengers only in the back seat, seat belts fastened, "
+        "driver not visible in any way, no reflections or silhouettes of the driver."
+    ),
+    "near the car": (
+        "Exterior scene with the character positioned near the selected vehicle, using side or slightly angled framing. "
+        "The vehicle must be clearly readable but the human action remains the story."
+    ),
+    "getting into the car": (
+        "Exterior car scene at the rear door only, character naturally entering or approaching the rear passenger seat. "
+        "Do not use the front door."
+    ),
+    "passenger with driver": (
+        "Show a natural ride-hailing interaction between passenger and driver only when physically plausible for the vehicle. "
+        "Keep the framing documentary and avoid staged posing."
+    ),
+    "car driving": (
+        "Exterior driving scene with the selected car in motion, side or slightly angled framing, realistic vehicle geometry, "
+        "and no impossible road placement."
+    ),
+}
+
+VEHICLE_TYPE_RULES = {
+    "car": (
+        "Use the selected car model exactly, with the latest body-year appended. "
+        "For interior scenes, passengers are in the back seat and the driver is never visible unless the composition explicitly asks for driver interaction."
+    ),
+    "moto": (
+        "Use a red motorcycle. A driver is always present. The passenger sits behind the driver. "
+        "If the scene focuses on the passenger, keep the driver cropped, back view, or mostly out of frame."
+    ),
+    "tuktuk": (
+        "Use a red tuk-tuk. A driver is always present. Passengers sit in the back. "
+        "If the scene focuses on passenger(s), the driver must not be visible in any way."
+    ),
+}
+
 ANGLE_RULES = {
     "Front 3/4": (
         "Front 3/4: front corner must be dominant, visible front fascia + one side plane, "
@@ -601,39 +656,111 @@ def load_tokens_from_file() -> None:
 load_tokens_from_file()
 
 
+def _normalize_vehicle_for_prompt(vehicle_model: str, vehicle_type: str) -> str:
+    vehicle_type = (vehicle_type or "car").strip().lower()
+    if vehicle_type == "moto":
+        return "red motorcycle"
+    if vehicle_type == "tuktuk":
+        return "red tuk-tuk"
+
+    request = PromptRequest(car=vehicle_model, color="")
+    try:
+        return infer_car_with_year_with_openai(request)
+    except Exception:
+        return vehicle_model
+
+
 def call_openai(
     car_model: str,
-    color_name: str,
-    color_hex: str,
-    preferred_angle_label: str,
+    color_name: str = "",
+    color_hex: str = "",
+    preferred_angle_label: str = "",
+    *,
+    service: str = "Ride-hailing",
+    style: str = "Photo",
+    country: str = "",
+    transport_label: str = "",
+    transport_code: str = "",
+    basic_class: str = "",
+    vehicle_type: str = "car",
+    composition: str = "",
+    model_description: str = "",
+    situation_description: str = "",
 ) -> str:
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY is not set")
 
-    angle_label = preferred_angle_label.strip()
-    angle_rules = ANGLE_RULES.get(angle_label, "")
+    _ = color_name, color_hex, preferred_angle_label
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    vehicle_type = (vehicle_type or "car").strip().lower()
+    vehicle_descriptor = _normalize_vehicle_for_prompt(car_model, vehicle_type)
+    composition_key = (composition or "").strip().lower()
+    composition_rule = COMPOSITION_RULES.get(composition_key, "Use a cropped, asymmetrical documentary composition.")
+    vehicle_rule = VEHICLE_TYPE_RULES.get(vehicle_type, VEHICLE_TYPE_RULES["car"])
 
-    request = PromptRequest(
-        car=car_model,
-        color=color_name,
-        location_text=None,
-        preferred_angle=angle_rules or None,
-        preferred_angle_label=angle_label or None,
+    user_prompt = f"""
+Create one final image-generation prompt for a Yango Perf Super App ride-hailing visual.
+
+Selected inputs:
+- Service: {service or "Ride-hailing"}
+- Style: {style or "Photo"}
+- Country: {country or "not specified"}
+- Transport tariff: {transport_label or "not specified"}
+- Tariff class: {basic_class or "not specified"}
+- Tariff code: {transport_code or "not specified"}
+- Vehicle type: {vehicle_type}
+- Vehicle to use: {vehicle_descriptor}
+- Composition: {composition or "not specified"}
+- Hero/model description: {model_description or "not provided"}
+- Situation description: {situation_description or "not provided"}
+
+Composition rule:
+{composition_rule}
+
+Vehicle rule:
+{vehicle_rule}
+
+Country localization:
+The scene must feel specifically local to {country or "the selected country"} through architecture, materials, climate, demographics, and small real-life details.
+
+Output format:
+Main character(s) and action: 1-2 sentences
+Clothing and appearance: 2-3 sentences
+Location and surroundings / interior: 2-3 sentences
+Time and atmosphere: 1 sentence
+Background elements: 0-1 sentence
+Photography style and angle: 1 sentence
+
+Final check before answering:
+- Correct selected vehicle is used.
+- Car models include latest body-year naming.
+- Motorcycle and tuk-tuk are red when selected.
+- Impossible car-only compositions are not used for motorcycle or tuk-tuk.
+- If a phone appears, it is red.
+- No logos, no app UI, no text, no watermark.
+- The word illustration is not used.
+"""
+
+    response = client.responses.create(
+        model=model,
+        input=[
+            {
+                "role": "system",
+                "content": (
+                    "You generate strict, production-ready image prompts for realistic ride-hailing campaign visuals. "
+                    "If the user inputs conflict with the guide, the guide wins. Return only the final prompt text.\n\n"
+                    f"--- GUIDE START ---\n{SUPER_APP_VISUAL_GUIDE}\n--- GUIDE END ---"
+                ),
+            },
+            {"role": "user", "content": user_prompt},
+        ],
     )
 
-    try:
-        request.car_with_year = infer_car_with_year_with_openai(request)
-    except Exception:
-        request.car_with_year = request.car
-
-    try:
-        request.vehicle_profile = classify_vehicle_profile_with_openai(request)
-    except Exception:
-        request.vehicle_profile = infer_vehicle_profile_from_keywords(request)
-
-    # Keep color hex available if needed by future prompt logic.
-    _ = color_hex
-    return generate_prompt_with_openai(request)
+    prompt = (response.output_text or "").strip()
+    if not prompt:
+        raise RuntimeError("OpenAI returned an empty response.")
+    return prompt
 
 
 def _fallback_edit_suggestions(car_model: str) -> list[str]:
@@ -3306,14 +3433,45 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.loads(raw.decode("utf-8"))
 
             if self.path == "/api/generate-image":
-                car_model = str(body.get("carModel", "")).strip()
+                car_model = str(body.get("vehicleModel") or body.get("carModel", "")).strip()
                 color_name = str(body.get("colorName", "")).strip()
                 color_hex = str(body.get("colorHex", "")).strip()
                 preferred_angle = str(body.get("preferredAngle", "")).strip()
+                service = str(body.get("service", "Ride-hailing")).strip()
+                style = str(body.get("style", "Photo")).strip()
+                country = str(body.get("country", "")).strip()
+                transport_label = str(body.get("transportLabel", "")).strip()
+                transport_code = str(body.get("transportCode", "")).strip()
+                basic_class = str(body.get("basicClass", "")).strip()
+                vehicle_type = str(body.get("vehicleType", "car")).strip()
+                composition = str(body.get("composition", "")).strip()
+                model_description = str(body.get("modelDescription", "")).strip()
+                situation_description = str(body.get("situationDescription", "")).strip()
                 if not car_model:
-                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "carModel is required"})
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "vehicleModel is required"})
                     return
-                prompt = call_openai(car_model, color_name, color_hex, preferred_angle)
+                if not country:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "country is required"})
+                    return
+                if not transport_label:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "transportLabel is required"})
+                    return
+                prompt = call_openai(
+                    car_model,
+                    color_name,
+                    color_hex,
+                    preferred_angle,
+                    service=service,
+                    style=style,
+                    country=country,
+                    transport_label=transport_label,
+                    transport_code=transport_code,
+                    basic_class=basic_class,
+                    vehicle_type=vehicle_type,
+                    composition=composition,
+                    model_description=model_description,
+                    situation_description=situation_description,
+                )
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     image_future = executor.submit(generate_image_with_recraft, prompt)
                     suggestions_future = executor.submit(generate_edit_suggestions_with_openai, car_model, prompt)

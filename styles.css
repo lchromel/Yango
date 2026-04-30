@@ -1,6 +1,6 @@
 :root {
   --bg: #0e0e0e;
-  --panel: #97a56e;
+  --panel: #fd2501;
   --line: rgba(14, 14, 14, 0.45);
   --soft-line: rgba(188, 188, 188, 0.2);
   --text-dark: #0e0e0e;
@@ -130,6 +130,7 @@ body {
 }
 
 .field-label {
+  display: block;
   margin: 0 0 10px;
   font-size: 8px;
   font-weight: 700;
@@ -161,17 +162,38 @@ body {
   color: rgba(14, 14, 14, 0.45);
 }
 
+.text-area::placeholder {
+  color: rgba(14, 14, 14, 0.55);
+}
+
 .text-area-compact {
   min-height: 36px;
   max-height: 90px;
 }
 
-.car-model-wrap {
+.image-text-area {
+  min-height: 48px;
+  max-height: 112px;
+}
+
+.select-section {
+  padding-bottom: 8px;
+}
+
+.static-field-value {
+  margin: 0;
+  color: #0e0e0e;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.select-wrap {
   width: 100%;
   position: relative;
 }
 
-.car-model-toggle {
+.select-toggle {
   width: 100%;
   height: 20px;
   border: 0;
@@ -184,20 +206,25 @@ body {
   cursor: pointer;
 }
 
-.car-model-display {
+.select-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.select-display {
   font-size: 16px;
   font-weight: 800;
   line-height: 1;
   text-align: left;
 }
 
-.car-model-chevron-icon {
+.select-chevron-icon {
   width: 20px;
   height: 20px;
   display: block;
 }
 
-.car-model-menu {
+.select-menu {
   margin-top: 10px;
   max-height: 128px;
   overflow-y: auto;
@@ -205,7 +232,7 @@ body {
   padding-right: 4px;
 }
 
-.car-model-option {
+.select-option {
   width: 100%;
   border: 0;
   background: transparent;
@@ -221,17 +248,17 @@ body {
   transition: font-weight 0.12s ease, font-size 0.12s ease;
 }
 
-.car-model-option:last-child {
+.select-option:last-child {
   margin-bottom: 0;
 }
 
-.car-model-option:hover,
-.car-model-option:focus-visible {
+.select-option:hover,
+.select-option:focus-visible {
   font-weight: 700;
   font-size: 17px;
 }
 
-.car-model-option.is-active {
+.select-option.is-active {
   font-weight: 400;
 }
 
@@ -316,7 +343,7 @@ body {
 
 .angle-chip.is-active {
   background: #0e0e0e;
-  color: #97a56e;
+  color: var(--panel);
 }
 
 .angle-chip.is-disabled {
@@ -719,7 +746,7 @@ body {
 
 .add-set-btn:hover {
   background: #0e0e0e;
-  color: #97a56e;
+  color: var(--panel);
 }
 
 .section-generate {
@@ -741,7 +768,7 @@ body {
 
 .generate-btn:hover {
   background: #0e0e0e;
-  color: #97a56e;
+  color: var(--panel);
 }
 
 .generate-btn:disabled,
@@ -799,7 +826,8 @@ body {
   width: 100%;
   max-width: 900px;
   aspect-ratio: 16 / 9;
-  background: #d9d9d9;
+  border: 1px solid var(--soft-line);
+  background: transparent;
   margin: 0 auto;
   overflow: hidden;
 }
@@ -1103,7 +1131,7 @@ body {
   height: 14px;
   border: 1px solid #0e0e0e;
   border-radius: 999px;
-  background: #97a56e;
+  background: var(--panel);
   display: inline-flex;
   align-items: center;
   justify-content: center;

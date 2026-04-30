@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Yango Drive Prompt Builder</title>
+    <title>Yango Perf</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="app">
       <aside class="sidebar">
         <div class="brand-block">
-          <h1 class="brand-title">YangoDrive</h1>
+          <h1 class="brand-title">Yango Perf</h1>
         </div>
 
         <div class="tab-row" role="tablist" aria-label="Builder tabs">
@@ -21,34 +21,63 @@
 
         <div id="imageTabPanel" class="tab-panel is-active" role="tabpanel">
           <div class="tab-panel-scroll">
-            <section class="section">
-              <p class="field-label">Car Model:</p>
-              <div class="car-model-wrap">
-                <button id="carModelToggle" class="car-model-toggle" type="button" aria-expanded="false">
-                  <span id="carModelDisplay" class="car-model-display">Select a car model</span>
+            <section class="section select-section">
+              <p class="field-label">Service:</p>
+              <p class="static-field-value">Ride-hailing</p>
+            </section>
+
+            <section class="section select-section">
+              <p class="field-label">Style:</p>
+              <p class="static-field-value">Photo</p>
+            </section>
+
+            <section class="section select-section">
+              <p class="field-label">Country:</p>
+              <div class="select-wrap">
+                <button id="countryToggle" class="select-toggle" type="button" aria-expanded="false">
+                  <span id="countryDisplay" class="select-display">Select a country</span>
                   <img
-                    id="carModelChevronIcon"
-                    class="car-model-chevron-icon"
+                    id="countryChevronIcon"
+                    class="select-chevron-icon"
                     src="./assets/icons/ChevronDownM.svg"
                     alt=""
                     aria-hidden="true"
                   />
                 </button>
-                <div id="carModelMenu" class="car-model-menu hidden"></div>
-                <div id="carModelCustomWrap" class="car-model-custom hidden">
-                  <input id="carModelCustomInput" class="text-input" type="text" value="" placeholder="Nissan Patrol" />
-                </div>
+                <div id="countryMenu" class="select-menu hidden"></div>
               </div>
             </section>
 
-            <section class="section">
-              <p class="field-label">Color: <span id="colorName" class="field-label-muted">White</span></p>
-              <div class="color-row" id="presetColors"></div>
+            <section class="section select-section">
+              <p class="field-label">Transport:</p>
+              <div class="select-wrap">
+                <button id="transportToggle" class="select-toggle" type="button" aria-expanded="false">
+                  <span id="transportDisplay" class="select-display">Select a vehicle</span>
+                  <img
+                    id="transportChevronIcon"
+                    class="select-chevron-icon"
+                    src="./assets/icons/ChevronDownM.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+                <div id="transportMenu" class="select-menu hidden"></div>
+              </div>
+            </section>
+
+            <section id="compositionSection" class="section hidden">
+              <p class="field-label">Composition</p>
+              <div id="compositionRow" class="angle-row"></div>
             </section>
 
             <section class="section">
-              <p class="field-label">Angle</p>
-              <div id="angleRow" class="angle-row"></div>
+              <label class="field-label" for="heroDescriptionInput">Hero</label>
+              <textarea id="heroDescriptionInput" class="text-area image-text-area" rows="2" placeholder="Describe the model"></textarea>
+            </section>
+
+            <section class="section">
+              <label class="field-label" for="situationDescriptionInput">Situation</label>
+              <textarea id="situationDescriptionInput" class="text-area image-text-area" rows="3" placeholder="Describe what you want"></textarea>
             </section>
 
           </div>
@@ -214,7 +243,6 @@
           </section>
         </div>
 
-        <input id="customColorInput" type="color" value="#f2cc00" hidden />
         <input id="bannerAccentColorInput" type="color" value="#E3FF74" hidden />
       </aside>
 
@@ -232,8 +260,8 @@
 
         <div id="imageCanvas" class="tab-canvas is-active">
           <div class="image-workspace">
-            <div id="imagePreviewFrame" class="image-preview-frame hidden">
-              <img id="resultImage" class="result-image" alt="Generated car visual" />
+            <div id="imagePreviewFrame" class="image-preview-frame">
+              <img id="resultImage" class="result-image hidden" alt="Generated car visual" />
             </div>
             <div class="prompt-row hidden">
               <textarea id="promptInput" class="prompt-input" rows="3" placeholder="nana bananu"></textarea>

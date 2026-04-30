@@ -1,0 +1,1002 @@
+{
+  "source": "Транспортные средства.xlsx",
+  "countries": [
+    {
+      "country": "Angola",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Hyundai i10",
+          "vehicleType": "car",
+          "orders": 354913
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Suzuki Alto",
+          "vehicleType": "car",
+          "orders": 183792
+        },
+        {
+          "label": "Bikes Premium",
+          "basicClass": "Moto",
+          "tariffCode": "moto_premium",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 51981
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Changan Eulove",
+          "vehicleType": "car",
+          "orders": 20200
+        }
+      ]
+    },
+    {
+      "country": "Azerbaijan",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Chevrolet Cobalt",
+          "vehicleType": "car",
+          "orders": 631583
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Toyota Corolla Fielder",
+          "vehicleType": "car",
+          "orders": 126832
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "BYD Destroyer 05",
+          "vehicleType": "car",
+          "orders": 40796
+        },
+        {
+          "label": "Business",
+          "basicClass": "Business",
+          "tariffCode": "vip",
+          "model": "Qiyuan Q05",
+          "vehicleType": "car",
+          "orders": 9113
+        },
+        {
+          "label": "Premier",
+          "basicClass": "Premier",
+          "tariffCode": "ultimate",
+          "model": "Geely TX5",
+          "vehicleType": "car",
+          "orders": 492
+        }
+      ]
+    },
+    {
+      "country": "Benin",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Yaris",
+          "vehicleType": "car",
+          "orders": 59927
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 31767
+        },
+        {
+          "label": "Tuktuk",
+          "basicClass": "Tuktuk",
+          "tariffCode": "tuktuk",
+          "model": "TukTuk",
+          "vehicleType": "tuktuk",
+          "orders": 4940
+        },
+        {
+          "label": "Street pickup",
+          "basicClass": "Econom",
+          "tariffCode": "street_pickup",
+          "model": "Toyota Yaris",
+          "vehicleType": "car",
+          "orders": 490
+        }
+      ]
+    },
+    {
+      "country": "Bolivia",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 973841
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 558925
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Suzuki Alto",
+          "vehicleType": "car",
+          "orders": 149578
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Suzuki Dzire",
+          "vehicleType": "car",
+          "orders": 76500
+        },
+        {
+          "label": "Start",
+          "basicClass": "Start",
+          "tariffCode": "start",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 17262
+        },
+        {
+          "label": "Business",
+          "basicClass": "Business",
+          "tariffCode": "vip",
+          "model": "GAC GS3",
+          "vehicleType": "car",
+          "orders": 6441
+        },
+        {
+          "label": "Minivan",
+          "basicClass": "Minivan",
+          "tariffCode": "minivan",
+          "model": "Toyota Hiace Touring",
+          "vehicleType": "car",
+          "orders": 3484
+        }
+      ]
+    },
+    {
+      "country": "Botswana",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Honda Fit",
+          "vehicleType": "car",
+          "orders": 93170
+        }
+      ]
+    },
+    {
+      "country": "Cameroon",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Самая левая модель",
+          "vehicleType": "car",
+          "orders": 255761
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 107782
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Toyota Avensis",
+          "vehicleType": "car",
+          "orders": 14965
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 10025
+        }
+      ]
+    },
+    {
+      "country": "Colombia",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Chevrolet Spark",
+          "vehicleType": "car",
+          "orders": 1602813
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 1171130
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Chevrolet Sail",
+          "vehicleType": "car",
+          "orders": 112020
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Renault Duster",
+          "vehicleType": "car",
+          "orders": 47740
+        },
+        {
+          "label": "Start",
+          "basicClass": "Start",
+          "tariffCode": "start",
+          "model": "Kia Picanto",
+          "vehicleType": "car",
+          "orders": 43101
+        },
+        {
+          "label": "Tuktuk",
+          "basicClass": "Tuktuk",
+          "tariffCode": "tuktuk",
+          "model": "TukTuk",
+          "vehicleType": "tuktuk",
+          "orders": 14501
+        }
+      ]
+    },
+    {
+      "country": "DR of the Congo",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Ist",
+          "vehicleType": "car",
+          "orders": 106391
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Suzuki Swift",
+          "vehicleType": "car",
+          "orders": 32533
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 1169
+        }
+      ]
+    },
+    {
+      "country": "Ethiopia",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Vitz",
+          "vehicleType": "car",
+          "orders": 500712
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Suzuki Dzire",
+          "vehicleType": "car",
+          "orders": 34795
+        },
+        {
+          "label": "Street pickup",
+          "basicClass": "Econom",
+          "tariffCode": "street_pickup",
+          "model": "Toyota Vitz",
+          "vehicleType": "car",
+          "orders": 27473
+        },
+        {
+          "label": "Tuktuk",
+          "basicClass": "Tuktuk",
+          "tariffCode": "tuktuk",
+          "model": "TukTuk",
+          "vehicleType": "tuktuk",
+          "orders": 1
+        }
+      ]
+    },
+    {
+      "country": "Ghana",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Vitz",
+          "vehicleType": "car",
+          "orders": 359919
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Toyota Yaris",
+          "vehicleType": "car",
+          "orders": 32288
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 7872
+        }
+      ]
+    },
+    {
+      "country": "Guatemala",
+      "tariffs": [
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 32895
+        },
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Honda Fit",
+          "vehicleType": "car",
+          "orders": 16868
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Mitsubisi Mirage",
+          "vehicleType": "car",
+          "orders": 1038
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Hyundai Accent",
+          "vehicleType": "car",
+          "orders": 368
+        }
+      ]
+    },
+    {
+      "country": "Israel",
+      "tariffs": [
+        {
+          "label": "Demostand",
+          "basicClass": "WL_Comfort+",
+          "tariffCode": "demostand",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 63971
+        },
+        {
+          "label": "Comfort+ B2B",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus_b2b",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 1031
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 807
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Same as in Tel Aviv",
+          "vehicleType": "car",
+          "orders": 277
+        }
+      ]
+    },
+    {
+      "country": "Ivory Coast",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Suzuki Alto",
+          "vehicleType": "car",
+          "orders": 1615303
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Suzuki Dzire",
+          "vehicleType": "car",
+          "orders": 839209
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Chery Tiggo 2",
+          "vehicleType": "car",
+          "orders": 57916
+        },
+        {
+          "label": "Business",
+          "basicClass": "Business",
+          "tariffCode": "vip",
+          "model": "FAW Bestune T55",
+          "vehicleType": "car",
+          "orders": 34323
+        },
+        {
+          "label": "Ivory Coast",
+          "basicClass": "Ivory Coast",
+          "tariffCode": "Ivory Coast",
+          "model": "Ivory Coast",
+          "vehicleType": "car",
+          "orders": 0
+        }
+      ]
+    },
+    {
+      "country": "Morocco",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Dacia Logan",
+          "vehicleType": "car",
+          "orders": 85045
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 55164
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Dacia Sandero",
+          "vehicleType": "car",
+          "orders": 6309
+        },
+        {
+          "label": "Start",
+          "basicClass": "Start",
+          "tariffCode": "start",
+          "model": "Dacia Logan",
+          "vehicleType": "car",
+          "orders": 254
+        }
+      ]
+    },
+    {
+      "country": "Mozambique",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Ist",
+          "vehicleType": "car",
+          "orders": 240943
+        },
+        {
+          "label": "Tuktuk",
+          "basicClass": "Tuktuk",
+          "tariffCode": "tuktuk",
+          "model": "Rickshaw",
+          "vehicleType": "tuktuk",
+          "orders": 53902
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Toyota Vitz",
+          "vehicleType": "car",
+          "orders": 36303
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 25366
+        }
+      ]
+    },
+    {
+      "country": "Namibia",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Mazda Demio",
+          "vehicleType": "car",
+          "orders": 307020
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Volkswagen Polo hatchback",
+          "vehicleType": "car",
+          "orders": 23596
+        }
+      ]
+    },
+    {
+      "country": "Nepal",
+      "tariffs": [
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 2019471
+        },
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Suzuki Alto",
+          "vehicleType": "car",
+          "orders": 281850
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Tata XPress-T",
+          "vehicleType": "car",
+          "orders": 53031
+        }
+      ]
+    },
+    {
+      "country": "Oman",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 64603
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Toyota Camry",
+          "vehicleType": "car",
+          "orders": 3207
+        },
+        {
+          "label": "Street pickup",
+          "basicClass": "Econom",
+          "tariffCode": "street_pickup",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 3110
+        },
+        {
+          "label": "Female",
+          "basicClass": "Econom",
+          "tariffCode": "female",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 2271
+        },
+        {
+          "label": "Minivan",
+          "basicClass": "Minivan",
+          "tariffCode": "minivan",
+          "model": "Toyota Sienna",
+          "vehicleType": "car",
+          "orders": 988
+        },
+        {
+          "label": "Business",
+          "basicClass": "Business",
+          "tariffCode": "vip",
+          "model": "Lexus ES",
+          "vehicleType": "car",
+          "orders": 407
+        },
+        {
+          "label": "Premier",
+          "basicClass": "Premier",
+          "tariffCode": "ultimate",
+          "model": "BMW 7er",
+          "vehicleType": "car",
+          "orders": 166
+        },
+        {
+          "label": "Start",
+          "basicClass": "Start",
+          "tariffCode": "start",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 4
+        }
+      ]
+    },
+    {
+      "country": "Pakistan",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Suzuki Mehran",
+          "vehicleType": "car",
+          "orders": 1886326
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 947913
+        },
+        {
+          "label": "Tuktuk",
+          "basicClass": "Tuktuk",
+          "tariffCode": "tuktuk",
+          "model": "Tuktuk",
+          "vehicleType": "tuktuk",
+          "orders": 894026
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Suzuki Alto",
+          "vehicleType": "car",
+          "orders": 558166
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Toyota Corolla",
+          "vehicleType": "car",
+          "orders": 9477
+        },
+        {
+          "label": "Scheduled city to city rides",
+          "basicClass": "Intercity",
+          "tariffCode": "intercity_preorder",
+          "model": "??",
+          "vehicleType": "car",
+          "orders": 513
+        }
+      ]
+    },
+    {
+      "country": "Peru",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Yaris",
+          "vehicleType": "car",
+          "orders": 1784436
+        },
+        {
+          "label": "Tuktuk",
+          "basicClass": "Tuktuk",
+          "tariffCode": "tuktuk",
+          "model": "TBC",
+          "vehicleType": "tuktuk",
+          "orders": 207167
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Kia Soluto",
+          "vehicleType": "car",
+          "orders": 186873
+        },
+        {
+          "label": "Minivan",
+          "basicClass": "Minivan",
+          "tariffCode": "minivan",
+          "model": "DFSK Glory 330",
+          "vehicleType": "car",
+          "orders": 58104
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Hyundai Elantra",
+          "vehicleType": "car",
+          "orders": 44306
+        },
+        {
+          "label": "Business",
+          "basicClass": "Business",
+          "tariffCode": "vip",
+          "model": "DFSK Glory 580",
+          "vehicleType": "car",
+          "orders": 6944
+        },
+        {
+          "label": "Summit b2b",
+          "basicClass": "WL_Comfort+",
+          "tariffCode": "summit_b2b",
+          "model": "Hyundai Elantra",
+          "vehicleType": "car",
+          "orders": 83
+        }
+      ]
+    },
+    {
+      "country": "Saudi Arabia",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "-",
+          "vehicleType": "car",
+          "orders": 186
+        }
+      ]
+    },
+    {
+      "country": "Senegal",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Peugeot 208",
+          "vehicleType": "car",
+          "orders": 791763
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Iran Khondro",
+          "vehicleType": "car",
+          "orders": 130348
+        },
+        {
+          "label": "Comfort+",
+          "basicClass": "Comfort+",
+          "tariffCode": "comfortplus",
+          "model": "Peugeot 308",
+          "vehicleType": "car",
+          "orders": 23365
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "",
+          "vehicleType": "moto",
+          "orders": 5577
+        }
+      ]
+    },
+    {
+      "country": "UAE",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Camry",
+          "vehicleType": "car",
+          "orders": 215133
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Lexus ES",
+          "vehicleType": "car",
+          "orders": 42051
+        },
+        {
+          "label": "Minivan",
+          "basicClass": "Minivan",
+          "tariffCode": "minivan",
+          "model": "Toyota Innova",
+          "vehicleType": "car",
+          "orders": 7224
+        },
+        {
+          "label": "Cruise",
+          "basicClass": "Cruise",
+          "tariffCode": "premium_van",
+          "model": "V klass",
+          "vehicleType": "car",
+          "orders": 3672
+        },
+        {
+          "label": "Business",
+          "basicClass": "Business",
+          "tariffCode": "vip",
+          "model": "GMC Yukon",
+          "vehicleType": "car",
+          "orders": 1535
+        },
+        {
+          "label": "Elite",
+          "basicClass": "Elite",
+          "tariffCode": "maybach",
+          "model": "BMW 7er",
+          "vehicleType": "car",
+          "orders": 1064
+        },
+        {
+          "label": "Kids",
+          "basicClass": "Kids",
+          "tariffCode": "child_tariff",
+          "model": "Детское кресло",
+          "vehicleType": "car",
+          "orders": 179
+        },
+        {
+          "label": "Standard b2b",
+          "basicClass": "Comfort",
+          "tariffCode": "standart_b2b",
+          "model": "Lexus ES",
+          "vehicleType": "car",
+          "orders": 97
+        },
+        {
+          "label": "Super VIP B2B",
+          "basicClass": "Comfort",
+          "tariffCode": "supervip_b2b",
+          "model": "GMC Yukon",
+          "vehicleType": "car",
+          "orders": 11
+        },
+        {
+          "label": "Street pickup business",
+          "basicClass": "Business",
+          "tariffCode": "street_pickup_business",
+          "model": "Toyota Camry",
+          "vehicleType": "car",
+          "orders": 1
+        }
+      ]
+    },
+    {
+      "country": "Venezuela",
+      "tariffs": [
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 101144
+        },
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Corolla (old)",
+          "vehicleType": "car",
+          "orders": 44606
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Chevrolet Aveo",
+          "vehicleType": "car",
+          "orders": 5690
+        }
+      ]
+    },
+    {
+      "country": "Zambia",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Vitz",
+          "vehicleType": "car",
+          "orders": 823714
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "Honda Fit",
+          "vehicleType": "car",
+          "orders": 68333
+        },
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 904
+        }
+      ]
+    }
+  ]
+}
