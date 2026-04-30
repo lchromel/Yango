@@ -182,6 +182,54 @@ COMPOSITION_RULES = {
         "Use realistic glass reflections of trees/buildings/sky, shallow depth between exterior street and interior passenger, and a close editorial crop that makes the window frame the subject. "
         "Do not make it a fully interior shot or a wide full-car exterior; the window and reflections must dominate the composition."
     ),
+    "near the moto": (
+        "Layered exterior lifestyle composition near the selected motorcycle. "
+        "Place the hero in the foreground or midground walking, waiting, carrying personal items, checking a phone, or moving past the motorcycle, while the motorcycle and driver remain nearby as ride-hailing context. "
+        "The motorcycle should be visible but not necessarily full-frame; it can sit behind or beside the hero, with the driver waiting, adjusting gear, or preparing the pickup. "
+        "Use strong local street depth, market or neighborhood architecture, textured pavement, warm daylight, candid movement, and editorial foreground/background layering. "
+        "Do not make this a driver-only shot, product-only motorcycle shot, or car-related scene."
+    ),
+    "driver": (
+        "Motorcycle driver-only street editorial composition. "
+        "Show one driver with the selected motorcycle in a full side or low 3/4 view, either seated on the bike, hands on or near the handlebars, adjusting gear, waiting at the curb, or preparing to ride. "
+        "The motorcycle must be clearly readable as a whole object with visible wheels, tank/body, handlebar, mirror, and seat, while the driver remains the only rider. "
+        "Use strong local architecture, market streets, textured walls, pavement, warm natural light, and optional blurred foreground passerby for depth and candid realism. "
+        "Do not add a passenger, do not crop into only a portrait, and do not turn it into a product-only motorcycle shot."
+    ),
+}
+
+MOTO_COMPOSITION_RULES = {
+    "passenger with driver": (
+        "Motorcycle passenger-with-driver exterior hero-shot. "
+        "Show the selected motorcycle in side or low 3/4 profile with the driver seated in front, hands on the handlebars, and one passenger seated directly behind, physically balanced and already ready to ride. "
+        "Both people should feel naturally placed on the bike; helmets should appear when locally plausible, and the passenger may hold a helmet, backpack, delivery bag, or rear grip. "
+        "Use a low-to-eye-level editorial street frame with the motorcycle body, handlebar, mirror, fuel tank, and seat clearly readable, plus strong local architecture or market/street context behind them. "
+        "Do not show a car interior, car doors, a standing passenger beside the bike, or an impossible seating arrangement."
+    ),
+}
+
+TUKTUK_COMPOSITION_RULES = {
+    "near the tuk tuk": (
+        "Wide street/fashion lifestyle composition near the selected tuk-tuk. "
+        "Place the hero in the foreground or midground walking past, waiting beside, approaching, or just leaving the tuk-tuk, carrying market bags, flowers, personal items, or a phone when relevant. "
+        "Keep the tuk-tuk clearly identifiable nearby or behind the hero, ideally with an open side entrance/canopy/cabin visible and the driver waiting inside or beside it as ride-hailing context. "
+        "Use busy local market streets, fruit stands, storefronts, pedestrians, textured pavement, warm daylight or evening shop light, and layered foreground/background movement. "
+        "The human story leads, the tuk-tuk anchors the scene; do not make it an inside-tuk-tuk shot, driver-only portrait, or clean product shot."
+    ),
+    "inside tuk tuk": (
+        "Inside-the-tuk-tuk passenger composition from within the small cabin or just outside the open side. "
+        "Frame passenger(s) seated on the rear bench while the driver is visible in the front/foreground or partially cropped, separated by the tuk-tuk frame, railings, canopy, and compact cabin structure. "
+        "Use the open side, small windows, metal bars, vinyl bench, low roof, dashboard/handlebar area, and street visible through the openings to create depth. "
+        "The feeling should be cramped, tactile, wide-angle, documentary, and close, with local traffic, shops, pedestrians, or evening street light visible outside. "
+        "Do not make it a car interior, do not place passengers in car-style seats, and do not turn it into a clean exterior shot."
+    ),
+    "driver": (
+        "Tuk-tuk driver-focused editorial composition from outside the vehicle, looking through the front windshield, side opening, or metal cabin frame. "
+        "Show the driver seated at the controls with hands on the handlebar/steering controls, ready to move or waiting in traffic; the tuk-tuk windshield, canopy, front frame, mirrors, dashboard, and cabin structure should dominate the foreground. "
+        "Use realistic glass reflections, street lights or warm shop light when appropriate, layered background traffic/pedestrians, and a candid nighttime or busy-street atmosphere. "
+        "A rear passenger may be softly visible only as secondary context, but the driver must be the clear subject. "
+        "Do not turn it into a car/motorcycle scene or a clean exterior product shot."
+    ),
 }
 
 VEHICLE_TYPE_RULES = {
@@ -190,12 +238,12 @@ VEHICLE_TYPE_RULES = {
         "For interior scenes, passengers are in the back seat and the driver is never visible unless the composition explicitly asks for driver interaction."
     ),
     "moto": (
-        "Use the selected motorcycle color. A driver is always present. The passenger sits behind the driver. "
-        "If the scene focuses on the passenger, keep the driver cropped, back view, or mostly out of frame."
+        "Use the selected motorcycle color. A driver is present unless the selected composition explicitly focuses only on the motorcycle context. "
+        "Only include a passenger when the selected composition asks for one, and keep all motorcycle seating physically plausible."
     ),
     "tuktuk": (
-        "Use the selected tuk-tuk color. A driver is always present. Passengers sit in the back. "
-        "If the scene focuses on passenger(s), the driver must not be visible in any way."
+        "Use the selected tuk-tuk color. Follow the selected tuk-tuk composition for whether the scene shows a passenger, driver, or exterior pickup context. "
+        "Keep the vehicle clearly recognizable as a tuk-tuk, not a car or motorcycle."
     ),
 }
 
@@ -719,7 +767,15 @@ def call_openai(
     vehicle_color = _vehicle_color_for_prompt(vehicle_type, color_name)
     vehicle_descriptor = _normalize_vehicle_for_prompt(car_model, vehicle_type, vehicle_color)
     composition_key = (composition or "").strip().lower()
-    composition_rule = COMPOSITION_RULES.get(composition_key, "Use a cropped, asymmetrical documentary composition.")
+    composition_rules = {}
+    if vehicle_type == "moto":
+        composition_rules = MOTO_COMPOSITION_RULES
+    elif vehicle_type == "tuktuk":
+        composition_rules = TUKTUK_COMPOSITION_RULES
+    composition_rule = composition_rules.get(
+        composition_key,
+        COMPOSITION_RULES.get(composition_key, "Use a cropped, asymmetrical documentary composition."),
+    )
     vehicle_rule = VEHICLE_TYPE_RULES.get(vehicle_type, VEHICLE_TYPE_RULES["car"])
 
     user_prompt = f"""

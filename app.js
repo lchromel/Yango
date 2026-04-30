@@ -4,10 +4,16 @@ const IMAGE_STYLE = "Photo";
 const IMAGE_REQUEST_TIMEOUT_MS = 8 * 60 * 1000;
 const COMPOSITION_PRESETS = [
   { label: "inside the car", vehicleTypes: ["car"] },
-  { label: "near the car", vehicleTypes: ["car", "moto", "tuktuk"] },
+  { label: "near the car", vehicleTypes: ["car"] },
   { label: "getting into the car", vehicleTypes: ["car"] },
-  { label: "passenger with driver", vehicleTypes: ["car", "moto", "tuktuk"] },
+  { label: "passenger with driver", vehicleTypes: ["car"] },
   { label: "window", vehicleTypes: ["car"] },
+  { label: "near the moto", vehicleTypes: ["moto"] },
+  { label: "passenger with driver", vehicleTypes: ["moto"] },
+  { label: "driver", vehicleTypes: ["moto"] },
+  { label: "near the tuk tuk", vehicleTypes: ["tuktuk"] },
+  { label: "inside tuk tuk", vehicleTypes: ["tuktuk"] },
+  { label: "driver", vehicleTypes: ["tuktuk"] },
 ];
 
 const BANNER_LAYOUTS = [
