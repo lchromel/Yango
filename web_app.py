@@ -153,24 +153,34 @@ Urban Fashion x Documentary Realism for ride-hailing performance visuals.
 
 COMPOSITION_RULES = {
     "inside the car": (
-        "Interior car POV from the driver's seat, passengers only in the back seat, seat belts fastened, "
-        "driver not visible in any way, no reflections or silhouettes of the driver."
+        "Interior back-seat car composition with a wide editorial photo feel. "
+        "Camera is inside the rear passenger area, angled across the back seat so the side window, door panel, roof liner, headrests, seat belts, and upholstery frame the subject. "
+        "Passenger(s) sit naturally in the back seat, relaxed or mid-gesture, with believable fashion/lifestyle styling and local city details visible through the window. "
+        "Use warm natural daylight, realistic car-interior shadows, slight wide-angle perspective, layered foreground objects when appropriate, and no visible driver."
     ),
     "near the car": (
-        "Exterior scene with the character positioned near the selected vehicle, using side or slightly angled framing. "
-        "The vehicle must be clearly readable but the human action remains the story."
+        "Exterior lifestyle composition beside the selected vehicle, shot wide enough to show the car side or rear 3/4, the street, pavement, architecture, and local neighborhood context. "
+        "The character is near the car, walking past it, waiting beside it, or standing by an open rear door; the car remains clearly readable but the human action leads the story. "
+        "Use low-to-eye-level editorial framing, natural sunlight, real street shadows, lots of environmental detail, and a candid ride-hailing moment rather than a posed car ad."
     ),
     "getting into the car": (
-        "Exterior car scene at the rear door only, character naturally entering or approaching the rear passenger seat. "
-        "Do not use the front door."
+        "Getting-into-the-car transition moment focused on the open rear passenger door only. "
+        "Show the character stepping into, leaning into, sitting down through, or just exiting the rear door; the open door frame, rear seat, wheel, door interior, and car body should create strong foreground structure. "
+        "Use low exterior angles near the rear wheel or a view from inside the back seat looking toward the open door, with believable body movement, bags or phone when relevant, and local street context beyond the car. "
+        "Do not use the front door; avoid static posing beside a closed vehicle."
     ),
     "passenger with driver": (
-        "Show a natural ride-hailing interaction between passenger and driver only when physically plausible for the vehicle. "
-        "Keep the framing documentary and avoid staged posing."
+        "Interior ride-hailing interaction with both driver and passenger visible in the same frame when physically plausible. "
+        "Frame from inside the car or through an open side door/window so the driver is in the front seat and the passenger(s) are in the back seat, sharing a natural conversation, greeting, laugh, or route moment. "
+        "Use dashboard/seat/door elements to create depth, allow slight foreground blur from steering wheel or door frame, and keep the mood candid, warm, and documentary rather than posed. "
+        "The driver must remain clearly the driver, with hands or posture oriented toward driving, while the passenger remains clearly in the rear passenger area."
     ),
-    "car driving": (
-        "Exterior driving scene with the selected car in motion, side or slightly angled framing, realistic vehicle geometry, "
-        "and no impossible road placement."
+    "window": (
+        "Window-focused exterior car composition shot from outside along the side of the vehicle. "
+        "Frame the passenger through the rear side window, with the window opening, glass edge, B/C pillar, door handle, and car body forming the main graphic structure. "
+        "The passenger is inside the back seat, leaning on the window line, resting an arm on the lowered glass, looking out, or using a phone; the seat belt and interior should remain visible. "
+        "Use realistic glass reflections of trees/buildings/sky, shallow depth between exterior street and interior passenger, and a close editorial crop that makes the window frame the subject. "
+        "Do not make it a fully interior shot or a wide full-car exterior; the window and reflections must dominate the composition."
     ),
 }
 

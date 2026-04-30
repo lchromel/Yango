@@ -7,7 +7,7 @@ const COMPOSITION_PRESETS = [
   { label: "near the car", vehicleTypes: ["car", "moto", "tuktuk"] },
   { label: "getting into the car", vehicleTypes: ["car"] },
   { label: "passenger with driver", vehicleTypes: ["car", "moto", "tuktuk"] },
-  { label: "car driving", vehicleTypes: ["car"] },
+  { label: "window", vehicleTypes: ["car"] },
 ];
 
 const BANNER_LAYOUTS = [
