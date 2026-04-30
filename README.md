@@ -48,14 +48,15 @@ python bot.py
 ## Веб-интерфейс
 
 Для веб-версии нужны:
-- `OPENAI_API_KEY` (генерация детального промта)
-- `RECRAFT_API_TOKEN` или `RECRAFT_API_KEY` (генерация изображения в Recraft v4)
+- `OPENAI_API_KEY` (генерация детального промта и первичного изображения через GPT Image)
+- `GEMINI_API_KEY` (редактирование изображения через Nano Banana / Gemini image)
 
 Запуск:
 
 ```bash
 export OPENAI_API_KEY="ваш_openai_api_key"
-export RECRAFT_API_TOKEN="ваш_recraft_api_token"
+export GEMINI_API_KEY="ваш_gemini_api_key"
+# опционально: OPENAI_IMAGE_MODEL="gpt-image-2"
 python3 web_app.py
 ```
 
@@ -89,8 +90,7 @@ python3 web_app.py
 1. Подключить GitHub-репозиторий как новый сервис.
 2. В переменных окружения Railway задать:
    - `OPENAI_API_KEY`
-   - `RECRAFT_API_TOKEN` или `RECRAFT_API_KEY`
-   - `GEMINI_API_KEY`, если нужен `Edit image`
+   - `GEMINI_API_KEY`
    - `CLIPDROP_API_KEY`, если нужен `uncrop`
    - `WEB_APP_BASIC_AUTH_USERNAME`, если нужна авторизация на весь веб-интерфейс
    - `WEB_APP_BASIC_AUTH_PASSWORD`, если нужна авторизация на весь веб-интерфейс

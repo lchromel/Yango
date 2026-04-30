@@ -633,10 +633,6 @@ def load_tokens_from_file() -> None:
                     "OPENAI_MODEL",
                     "GEMINI_API_KEY",
                     "GEMINI_MODEL",
-                    "RECRAFT_API_KEY",
-                    "RECRAFT_API_TOKEN",
-                    "RECRAFT_MODEL",
-                    "RECRAFT_SIZE",
                     "KLING_ACCESS_KEY",
                     "KLING_SECRET_KEY",
                     "REPLICATE_API_TOKEN",
@@ -761,183 +757,6 @@ Final check before answering:
     if not prompt:
         raise RuntimeError("OpenAI returned an empty response.")
     return prompt
-
-
-def _fallback_edit_suggestions(car_model: str) -> list[str]:
-    _ = car_model.strip() or "car"
-    return [
-        "stylish emirati man in a clean white polo, tapered trousers, premium sneakers, silver watch, walking toward the car with key fob in hand",
-        "indian woman in a modern casual look: cropped blazer, wide-leg jeans, sleek sneakers, statement earrings, approaching the car with a small shoulder bag",
-        "european couple in elevated casual outfits: man in unstructured blazer with chinos, woman in a minimalist co-ord set, both walking toward the car together",
-        "fashion-forward filipino man in relaxed luxury: short-sleeve knit polo, pleated trousers, loafers, sunglasses, approaching the car with a leather weekender",
-    ]
-
-
-def _contains_cyrillic(text: str) -> bool:
-    return bool(re.search(r"[А-Яа-яЁё]", text or ""))
-
-
-def _translate_suggestions_to_english_with_openai(suggestions: list[str]) -> list[str]:
-    if not os.getenv("OPENAI_API_KEY"):
-        return []
-    if not suggestions:
-        return []
-
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-    system_prompt = (
-        "You translate short UI suggestion lines into English. "
-        "Output valid JSON only."
-    )
-    user_prompt = (
-        "Translate each line to natural English and keep meaning. "
-        "Keep action as approaching/walking toward the car, never getting into the car. "
-        "Keep concise, concrete clothing/accessory details, no poetry. "
-        "Return strict JSON array of strings only.\n\n"
-        f"LINES:\n{json.dumps(suggestions, ensure_ascii=False)}"
-    )
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        raw = (response.choices[0].message.content or "").strip()
-        parsed = json.loads(raw)
-        if not isinstance(parsed, list):
-            return []
-        out = [str(item).strip(" .") for item in parsed if isinstance(item, str) and item.strip()]
-        return out
-    except Exception:
-        return []
-
-
-def generate_edit_suggestions_with_openai(car_model: str, base_prompt: str) -> list[str]:
-    if not os.getenv("OPENAI_API_KEY"):
-        return _fallback_edit_suggestions(car_model)
-
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-    car = car_model.strip() or "car"
-    base = base_prompt.strip() or ""
-    system_prompt = (
-        "You generate concise image-edit suggestion lines for a Dubai car ad workflow. "
-        "English only. Never use Russian or any non-English language. "
-        "Output must be valid JSON only."
-    )
-    user_prompt = (
-        "Generate 4 short image-edit suggestion lines in English for UI chips. "
-        "Each line must include only character styling details: who they are, what exactly they wear, accessories/items they carry, "
-        "and the action of approaching the car / walking toward the car. "
-        "Characters should be realistic Dubai residents with varied national backgrounds. "
-        "Make suggestions more interesting than single generic people: at least one line should feature a stylish couple. "
-        "Use elevated casual fashion only: polished casual and modern street-luxury, never formal eveningwear. "
-        "Imply lifestyle through styling only, "
-        "but do not explicitly say phrases like going to dinner, going to theatre, date night, event, etc. "
-        "Never use actions like getting into the car, sitting in the car, opening the door, entering the vehicle. "
-        "No poetic lines. No abstract style commentary. Only concrete wardrobe and object details. "
-        "Do not include instructions about composition, motion, location, background, or camera. "
-        "Do not start with verbs like Add/Create/Insert. "
-        "Format each item as one lowercase line, around 14-26 words. "
-        "CRITICAL: keep location/environment unchanged from the base generation. "
-        f"car: {car}. "
-        f"base prompt (location source): {base}. "
-        "Return strict JSON array of 4 strings only."
-    )
-
-    def _request_suggestions() -> list[str]:
-        response = client.chat.completions.create(
-            model=model,
-            temperature=0.8,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        raw = (response.choices[0].message.content or "").strip()
-        suggestions = json.loads(raw)
-        if not isinstance(suggestions, list):
-            raise ValueError("Suggestions are not a list")
-        return suggestions
-
-    try:
-        suggestions = _request_suggestions()
-        cleaned: list[str] = []
-        for item in suggestions:
-            if not isinstance(item, str):
-                continue
-            text = item.strip()
-            if not text:
-                continue
-            text = text.strip(" .")
-            lowered = text.lower()
-            banned_actions = (
-                "getting into",
-                "gets into",
-                "get into",
-                "sits in",
-                "sitting in",
-                "steps into",
-                "entering the car",
-                "enters the car",
-                "opens the door",
-            )
-            if any(token in lowered for token in banned_actions):
-                text = re.sub(
-                    r"\b(getting into|get into|gets into|sits in|sitting in|steps into|entering the car|enters the car|opens the door)\b",
-                    "approaching the car",
-                    text,
-                    flags=re.IGNORECASE,
-                )
-            cleaned.append(text)
-        if cleaned:
-            cleaned = cleaned[:4]
-            if any(_contains_cyrillic(line) for line in cleaned):
-                # One retry with an explicit hard constraint.
-                suggestions = _request_suggestions()
-                cleaned = []
-                for item in suggestions:
-                    if not isinstance(item, str):
-                        continue
-                    text = item.strip().strip(" .")
-                    if not text:
-                        continue
-                    lowered = text.lower()
-                    banned_actions = (
-                        "getting into",
-                        "gets into",
-                        "get into",
-                        "sits in",
-                        "sitting in",
-                        "steps into",
-                        "entering the car",
-                        "enters the car",
-                        "opens the door",
-                    )
-                    if any(token in lowered for token in banned_actions):
-                        text = re.sub(
-                            r"\b(getting into|get into|gets into|sits in|sitting in|steps into|entering the car|enters the car|opens the door)\b",
-                            "approaching the car",
-                            text,
-                            flags=re.IGNORECASE,
-                        )
-                    cleaned.append(text)
-                cleaned = cleaned[:4]
-            if any(_contains_cyrillic(line) for line in cleaned):
-                translated = _translate_suggestions_to_english_with_openai(cleaned)
-                if translated:
-                    cleaned = translated[:4]
-            # Final hard guard: never return non-English/cyrillic lines to UI.
-            if any(_contains_cyrillic(line) for line in cleaned):
-                return _fallback_edit_suggestions(car_model)
-            return cleaned
-    except Exception:
-        pass
-
-    return _fallback_edit_suggestions(car_model)
 
 
 def generate_video_prompt_with_openai(
@@ -1617,52 +1436,34 @@ def _gemini_generate_image_bytes(
     raise RuntimeError("Gemini returned no image data")
 
 
-def generate_image_with_recraft(prompt: str) -> tuple[str, str]:
-    api_key = os.getenv("RECRAFT_API_TOKEN") or os.getenv("RECRAFT_API_KEY")
+def generate_image_with_openai(prompt: str) -> tuple[str, str]:
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
-        raise RuntimeError("RECRAFT_API_TOKEN (or RECRAFT_API_KEY) is not set")
+        raise RuntimeError("OPENAI_API_KEY is not set")
 
-    model = os.getenv("RECRAFT_MODEL", "recraftv4")
-    size = "16:9"
-
-    client = OpenAI(api_key=api_key, base_url="https://external.api.recraft.ai/v1")
-    try:
-        response = client.images.generate(
-            model=model,
-            prompt=prompt,
-            size=size,
-            n=1,
-            response_format="b64_json",
-        )
-    except Exception:
-        response = client.images.generate(
-            model=model,
-            prompt=prompt,
-            size=size,
-            n=1,
-        )
+    client = OpenAI(api_key=api_key)
+    model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
+    size = os.getenv("OPENAI_IMAGE_SIZE", "1536x1024")
+    quality = os.getenv("OPENAI_IMAGE_QUALITY", "high")
+    response = client.images.generate(
+        model=model,
+        prompt=prompt,
+        size=size,
+        quality=quality,
+        n=1,
+        output_format="png",
+    )
     if not response.data:
-        raise RuntimeError("Recraft returned no image data")
+        raise RuntimeError("OpenAI image generation returned no image data")
 
     image = response.data[0]
-    image_url = getattr(image, "url", "") or ""
     b64_json = getattr(image, "b64_json", "") or ""
+    if not b64_json:
+        raise RuntimeError("OpenAI image generation returned no b64_json data")
 
-    if b64_json:
-        _ensure_output_directories()
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_name = f"generated_{stamp}.png"
-        file_path = GENERATED_DIR / file_name
-        raw = base64.b64decode(b64_json)
-        img = Image.open(BytesIO(raw)).convert("RGB")
-        img.save(file_path, format="PNG", optimize=True)
-        return image_url, f"/output/generated/{file_name}"
-
-    if image_url:
-        local_url = _save_generated_image_local(image_url)
-        return image_url, local_url
-
-    raise RuntimeError("Recraft returned neither b64_json nor image URL")
+    image_bytes = base64.b64decode(b64_json)
+    local_url = _save_generated_image_bytes(image_bytes, prefix="generated")
+    return local_url, local_url
 
 
 def _request_json(url: str, method: str, headers: dict, payload: Optional[dict] = None) -> dict:
@@ -3472,18 +3273,13 @@ class Handler(SimpleHTTPRequestHandler):
                     model_description=model_description,
                     situation_description=situation_description,
                 )
-                with ThreadPoolExecutor(max_workers=2) as executor:
-                    image_future = executor.submit(generate_image_with_recraft, prompt)
-                    suggestions_future = executor.submit(generate_edit_suggestions_with_openai, car_model, prompt)
-                    image_url, local_image_url = image_future.result()
-                    suggestions = suggestions_future.result()
+                image_url, local_image_url = generate_image_with_openai(prompt)
                 self._send_json(
                     HTTPStatus.OK,
                     {
                         "image_url": image_url,
                         "image_local_url": local_image_url,
                         "prompt": prompt,
-                        "edit_suggestions": suggestions,
                     },
                 )
                 return
@@ -3589,7 +3385,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not prompt:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "prompt is required"})
                     return
-                image_url, local_image_url = generate_image_with_recraft(prompt)
+                image_url, local_image_url = generate_image_with_openai(prompt)
                 self._send_json(
                     HTTPStatus.OK,
                     {

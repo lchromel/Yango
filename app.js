@@ -54,7 +54,6 @@ const state = {
   situationDescription: "",
   basePromptText: "",
   editPromptText: "",
-  editSuggestions: [],
   imageHistory: [],
   imageLibrary: [],
   imageUrl: "",
@@ -140,7 +139,6 @@ const promptInputEl = document.getElementById("promptInput");
 const promptBackBtn = document.getElementById("promptBackBtn");
 const promptApplyBtn = document.getElementById("promptApplyBtn");
 const promptRowEl = document.querySelector(".prompt-row");
-const promptSuggestionsEl = document.getElementById("promptSuggestions");
 const topActionBtn = document.getElementById("topActionBtn");
 
 const uploadImageInputEl = document.getElementById("uploadImageInput");
@@ -791,9 +789,6 @@ function renderUiState() {
   if (promptBackBtn) {
     promptBackBtn.disabled = state.generating || !state.imageHistory.length;
   }
-  if (promptSuggestionsEl) {
-    promptSuggestionsEl.classList.toggle("hidden", !state.imageUrl || !state.editSuggestions.length);
-  }
   if (promptInputEl.value !== state.editPromptText) {
     promptInputEl.value = state.editPromptText;
   }
@@ -838,28 +833,6 @@ function pushImageToHistory(url) {
   const last = state.imageHistory[state.imageHistory.length - 1] || "";
   if (last === value) return;
   state.imageHistory.push(value);
-}
-
-function renderPromptSuggestions() {
-  if (!promptSuggestionsEl) return;
-  promptSuggestionsEl.innerHTML = "";
-  state.editSuggestions.forEach((text) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "prompt-suggestion-chip";
-    chip.textContent = text;
-    chip.addEventListener("click", () => {
-      const normalized = String(text || "").trim().replace(/\s+/g, " ").replace(/[.]+$/g, "");
-      state.editPromptText = [
-        `Add ${normalized}.`,
-        "Remove any sense of car motion.",
-        "Keep the original composition and car position unchanged.",
-      ].join(" ");
-      renderUiState();
-      promptInputEl.focus();
-    });
-    promptSuggestionsEl.appendChild(chip);
-  });
 }
 
 function renderCompositions() {
@@ -1404,14 +1377,12 @@ async function generatePrompt() {
   state.generating = true;
   state.basePromptText = "";
   state.editPromptText = "";
-  state.editSuggestions = [];
   state.videoPromptText = "";
   state.videoRenderStatus = "No video yet.";
   state.videoResultUrl = "";
   state.imageUrl = "";
   state.renderedBanners = [];
   setSourceStatus("uploading");
-  renderPromptSuggestions();
   renderUiState();
   renderBannerSetsView();
 
@@ -1442,9 +1413,6 @@ async function generatePrompt() {
     state.bannerSourceImageUrl = state.imageUrl;
     state.basePromptText = payload.prompt || "";
     state.editPromptText = "";
-    state.editSuggestions = Array.isArray(payload.edit_suggestions)
-      ? payload.edit_suggestions.map((item) => String(item || "").trim()).filter(Boolean)
-      : [];
     if (!state.imageUrl) throw new Error("No image returned");
     if (previousImageUrl && previousImageUrl !== state.imageUrl) {
       pushImageToHistory(previousImageUrl);
@@ -1455,7 +1423,6 @@ async function generatePrompt() {
     setSourceStatus("failed");
   } finally {
     state.generating = false;
-    renderPromptSuggestions();
     renderUiState();
   }
 }
@@ -1888,7 +1855,6 @@ uploadImageInputEl.addEventListener("change", async (event) => {
     state.bannerSourceImageUrl = localUrl;
     state.basePromptText = "";
     state.editPromptText = "";
-    state.editSuggestions = [];
     state.videoPromptText = "";
     state.videoRenderStatus = "No video yet.";
     state.videoResultUrl = "";
@@ -2037,7 +2003,6 @@ renderLayoutTypes();
 renderShiftControls();
 renderTextSetsEditor();
 renderBannerSetsView();
-renderPromptSuggestions();
 renderUiState();
 fetchVehicleData();
 fetchImageLibrary();
@@ -2079,7 +2044,6 @@ if (promptBackBtn) {
     state.imageUrl = previous;
     state.bannerSourceImageUrl = previous;
     state.editPromptText = "";
-    state.editSuggestions = [];
     state.videoPromptText = "";
     state.videoRenderStatus = "No video yet.";
     state.videoResultUrl = "";
