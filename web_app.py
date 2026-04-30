@@ -1459,7 +1459,8 @@ def generate_image_with_openai(prompt: str) -> tuple[str, str]:
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set")
 
-    client = OpenAI(api_key=api_key)
+    timeout_seconds = float(os.getenv("OPENAI_IMAGE_TIMEOUT_SECONDS", "480") or "480")
+    client = OpenAI(api_key=api_key, timeout=timeout_seconds, max_retries=1)
     model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
     size = os.getenv("OPENAI_IMAGE_SIZE", "1536x1024")
     quality = os.getenv("OPENAI_IMAGE_QUALITY", "high")

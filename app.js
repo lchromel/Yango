@@ -1,6 +1,7 @@
 const VEHICLE_DATA_URL = "./assets/data/vehicles.json";
 const IMAGE_SERVICE = "Ride-hailing";
 const IMAGE_STYLE = "Photo";
+const IMAGE_REQUEST_TIMEOUT_MS = 8 * 60 * 1000;
 const COMPOSITION_PRESETS = [
   { label: "inside the car", vehicleTypes: ["car"] },
   { label: "near the car", vehicleTypes: ["car", "moto", "tuktuk"] },
@@ -97,6 +98,24 @@ const state = {
   imageShiftXStep: 0,
   imageShiftYStep: 0,
 };
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = IMAGE_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: options.signal || controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Request timed out. GPT Image can take several minutes, please try again.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 const SOURCE_STATUS = {
   none: "STATUS",
@@ -1388,7 +1407,7 @@ async function generatePrompt() {
   renderBannerSetsView();
 
   try {
-    const response = await fetch("/api/generate-image", {
+    const response = await fetchWithTimeout("/api/generate-image", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
@@ -1747,7 +1766,7 @@ promptApplyBtn.addEventListener("click", () => {
         if (!state.basePromptText.trim()) {
           throw new Error("ENTER EDIT PROMPT OR GENERATE BASE IMAGE FIRST");
         }
-        response = await fetch("/api/regenerate-image", {
+        response = await fetchWithTimeout("/api/regenerate-image", {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
@@ -1756,7 +1775,7 @@ promptApplyBtn.addEventListener("click", () => {
           }),
         });
       } else {
-        response = await fetch("/api/edit-image", {
+        response = await fetchWithTimeout("/api/edit-image", {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },

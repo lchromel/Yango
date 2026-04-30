@@ -57,6 +57,7 @@ python bot.py
 export OPENAI_API_KEY="ваш_openai_api_key"
 export GEMINI_API_KEY="ваш_gemini_api_key"
 # опционально: OPENAI_IMAGE_MODEL="gpt-image-2"
+# опционально: OPENAI_IMAGE_TIMEOUT_SECONDS="480"
 python3 web_app.py
 ```
 
