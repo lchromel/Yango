@@ -1,0 +1,131 @@
+{
+  "version": 2,
+  "name": "REDESIGN request: Super App Africa Valentine banner",
+  "need_auth": true,
+  "allow_multiple_answers": false,
+  "questions": {
+    "pages": [
+      {
+        "items": [
+          {
+            "id": null,
+            "type": "comment",
+            "label": "Заявка для REDESIGN: баннер ко Дню всех влюбленных для Super App в Африке",
+            "slug": "intro",
+            "hidden": false,
+            "header": true
+          },
+          {
+            "id": null,
+            "type": "enum",
+            "label": "Сервис",
+            "slug": "service",
+            "hidden": false,
+            "widget": "radio",
+            "items": [
+              {
+                "id": null,
+                "slug": "super_app",
+                "label": "Super App",
+                "hidden": false
+              }
+            ],
+            "validators": [
+              {
+                "type": "required"
+              }
+            ]
+          },
+          {
+            "id": null,
+            "type": "enum",
+            "label": "Регион",
+            "slug": "region",
+            "hidden": false,
+            "widget": "radio",
+            "items": [
+              {
+                "id": null,
+                "slug": "africa",
+                "label": "Africa",
+                "hidden": false
+              }
+            ],
+            "validators": [
+              {
+                "type": "required"
+              }
+            ]
+          },
+          {
+            "id": null,
+            "type": "enum",
+            "label": "Тип креатива",
+            "slug": "asset_type",
+            "hidden": false,
+            "widget": "radio",
+            "items": [
+              {
+                "id": null,
+                "slug": "banner",
+                "label": "Banner",
+                "hidden": false
+              }
+            ],
+            "validators": [
+              {
+                "type": "required"
+              }
+            ]
+          },
+          {
+            "id": null,
+            "type": "string",
+            "label": "Кампания",
+            "slug": "campaign",
+            "hidden": false,
+            "multiline": false,
+            "initial": "Valentine's Day",
+            "validators": [
+              {
+                "type": "required"
+              }
+            ]
+          },
+          {
+            "id": null,
+            "type": "string",
+            "label": "Задача",
+            "slug": "task_summary",
+            "hidden": false,
+            "multiline": false,
+            "initial": "Нужно сделать баннер ко Дню всех влюбленных",
+            "validators": [
+              {
+                "type": "required"
+              }
+            ]
+          },
+          {
+            "id": null,
+            "type": "string",
+            "label": "Детали брифа",
+            "slug": "brief_details",
+            "hidden": false,
+            "multiline": true,
+            "placeholder": "Цель, аудитория, месседж, сроки, размеры и площадки",
+            "validators": [
+              {
+                "type": "required"
+              },
+              {
+                "type": "max",
+                "value": 4000
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
