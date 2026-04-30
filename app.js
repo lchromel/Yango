@@ -600,6 +600,7 @@ async function fetchVehicleData() {
                     tariffCode: String(tariff.tariffCode || "").trim(),
                     model: String(tariff.model || "").trim(),
                     vehicleType: String(tariff.vehicleType || "car").trim() || "car",
+                    colorName: String(tariff.colorName || "").trim(),
                     orders: Number(tariff.orders || 0),
                   }))
                   .filter((tariff) => tariff.label && tariff.model)
@@ -1400,6 +1401,7 @@ async function generatePrompt() {
         basicClass: selectedTransport.basicClass,
         vehicleModel: selectedTransport.model,
         vehicleType: selectedTransport.vehicleType,
+        colorName: selectedTransport.colorName,
         composition: state.selectedComposition,
         modelDescription: state.heroDescription,
         situationDescription: state.situationDescription,

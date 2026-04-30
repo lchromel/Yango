@@ -71,7 +71,8 @@
           "tariffCode": "vip",
           "model": "Qiyuan Q05",
           "vehicleType": "car",
-          "orders": 9113
+          "orders": 9113,
+          "colorName": "black"
         },
         {
           "label": "Premier",
@@ -79,7 +80,8 @@
           "tariffCode": "ultimate",
           "model": "Geely TX5",
           "vehicleType": "car",
-          "orders": 492
+          "orders": 492,
+          "colorName": "red"
         }
       ]
     },
@@ -161,7 +163,8 @@
           "tariffCode": "start",
           "model": "Toyota Corolla",
           "vehicleType": "car",
-          "orders": 17262
+          "orders": 17262,
+          "colorName": "yellow"
         },
         {
           "label": "Business",
@@ -272,7 +275,8 @@
           "tariffCode": "start",
           "model": "Kia Picanto",
           "vehicleType": "car",
-          "orders": 43101
+          "orders": 43101,
+          "colorName": "yellow"
         },
         {
           "label": "Tuktuk",
@@ -478,7 +482,8 @@
           "tariffCode": "comfortplus",
           "model": "Chery Tiggo 2",
           "vehicleType": "car",
-          "orders": 57916
+          "orders": 57916,
+          "colorName": "white"
         },
         {
           "label": "Business",
@@ -486,7 +491,8 @@
           "tariffCode": "vip",
           "model": "FAW Bestune T55",
           "vehicleType": "car",
-          "orders": 34323
+          "orders": 34323,
+          "colorName": "black"
         },
         {
           "label": "Ivory Coast",
@@ -552,7 +558,8 @@
           "tariffCode": "tuktuk",
           "model": "Rickshaw",
           "vehicleType": "tuktuk",
-          "orders": 53902
+          "orders": 53902,
+          "colorName": "green"
         },
         {
           "label": "Comfort",
@@ -631,7 +638,8 @@
           "tariffCode": "econom",
           "model": "Toyota Corolla",
           "vehicleType": "car",
-          "orders": 64603
+          "orders": 64603,
+          "colorName": "white with orange pillars and orange fender accents"
         },
         {
           "label": "Comfort",
@@ -639,7 +647,8 @@
           "tariffCode": "business",
           "model": "Toyota Camry",
           "vehicleType": "car",
-          "orders": 3207
+          "orders": 3207,
+          "colorName": "white with orange pillars and orange fender accents"
         },
         {
           "label": "Street pickup",
@@ -655,7 +664,8 @@
           "tariffCode": "female",
           "model": "Toyota Corolla",
           "vehicleType": "car",
-          "orders": 2271
+          "orders": 2271,
+          "colorName": "white with pink pillars"
         },
         {
           "label": "Minivan",
@@ -663,7 +673,8 @@
           "tariffCode": "minivan",
           "model": "Toyota Sienna",
           "vehicleType": "car",
-          "orders": 988
+          "orders": 988,
+          "colorName": "white with orange pillars and orange fender accents"
         },
         {
           "label": "Business",
@@ -671,7 +682,8 @@
           "tariffCode": "vip",
           "model": "Lexus ES",
           "vehicleType": "car",
-          "orders": 407
+          "orders": 407,
+          "colorName": "black"
         },
         {
           "label": "Premier",
@@ -679,7 +691,8 @@
           "tariffCode": "ultimate",
           "model": "BMW 7er",
           "vehicleType": "car",
-          "orders": 166
+          "orders": 166,
+          "colorName": "black"
         },
         {
           "label": "Start",
@@ -777,7 +790,8 @@
           "tariffCode": "minivan",
           "model": "DFSK Glory 330",
           "vehicleType": "car",
-          "orders": 58104
+          "orders": 58104,
+          "colorName": "white"
         },
         {
           "label": "Comfort+",
@@ -793,7 +807,8 @@
           "tariffCode": "vip",
           "model": "DFSK Glory 580",
           "vehicleType": "car",
-          "orders": 6944
+          "orders": 6944,
+          "colorName": "black"
         },
         {
           "label": "Summit b2b",
@@ -864,7 +879,8 @@
           "tariffCode": "econom",
           "model": "Toyota Camry",
           "vehicleType": "car",
-          "orders": 215133
+          "orders": 215133,
+          "colorName": "white with a colored roof"
         },
         {
           "label": "Comfort",
@@ -888,7 +904,8 @@
           "tariffCode": "premium_van",
           "model": "V klass",
           "vehicleType": "car",
-          "orders": 3672
+          "orders": 3672,
+          "colorName": "black"
         },
         {
           "label": "Business",
@@ -896,7 +913,8 @@
           "tariffCode": "vip",
           "model": "GMC Yukon",
           "vehicleType": "car",
-          "orders": 1535
+          "orders": 1535,
+          "colorName": "black"
         },
         {
           "label": "Elite",
@@ -904,7 +922,8 @@
           "tariffCode": "maybach",
           "model": "BMW 7er",
           "vehicleType": "car",
-          "orders": 1064
+          "orders": 1064,
+          "colorName": "black"
         },
         {
           "label": "Kids",

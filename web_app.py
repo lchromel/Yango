@@ -176,15 +176,15 @@ COMPOSITION_RULES = {
 
 VEHICLE_TYPE_RULES = {
     "car": (
-        "Use the selected car model exactly, with the latest body-year appended. "
+        "Use the selected car model exactly, with the selected color and latest body-year appended. "
         "For interior scenes, passengers are in the back seat and the driver is never visible unless the composition explicitly asks for driver interaction."
     ),
     "moto": (
-        "Use a red motorcycle. A driver is always present. The passenger sits behind the driver. "
+        "Use the selected motorcycle color. A driver is always present. The passenger sits behind the driver. "
         "If the scene focuses on the passenger, keep the driver cropped, back view, or mostly out of frame."
     ),
     "tuktuk": (
-        "Use a red tuk-tuk. A driver is always present. Passengers sit in the back. "
+        "Use the selected tuk-tuk color. A driver is always present. Passengers sit in the back. "
         "If the scene focuses on passenger(s), the driver must not be visible in any way."
     ),
 }
@@ -652,18 +652,34 @@ def load_tokens_from_file() -> None:
 load_tokens_from_file()
 
 
-def _normalize_vehicle_for_prompt(vehicle_model: str, vehicle_type: str) -> str:
+def _default_vehicle_color(vehicle_type: str) -> str:
     vehicle_type = (vehicle_type or "car").strip().lower()
+    if vehicle_type in {"moto", "tuktuk"}:
+        return "red"
+    return "white"
+
+
+def _vehicle_color_for_prompt(vehicle_type: str, color_name: str = "") -> str:
+    color = (color_name or "").strip()
+    if color:
+        return color
+    return _default_vehicle_color(vehicle_type)
+
+
+def _normalize_vehicle_for_prompt(vehicle_model: str, vehicle_type: str, color_name: str = "") -> str:
+    vehicle_type = (vehicle_type or "car").strip().lower()
+    vehicle_color = _vehicle_color_for_prompt(vehicle_type, color_name)
     if vehicle_type == "moto":
-        return "red motorcycle"
+        return f"{vehicle_color} motorcycle"
     if vehicle_type == "tuktuk":
-        return "red tuk-tuk"
+        return f"{vehicle_color} tuk-tuk"
 
     request = PromptRequest(car=vehicle_model, color="")
     try:
-        return infer_car_with_year_with_openai(request)
+        car_with_year = infer_car_with_year_with_openai(request)
     except Exception:
-        return vehicle_model
+        car_with_year = vehicle_model
+    return f"{vehicle_color} {car_with_year}".strip()
 
 
 def call_openai(
@@ -686,11 +702,12 @@ def call_openai(
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY is not set")
 
-    _ = color_name, color_hex, preferred_angle_label
+    _ = color_hex, preferred_angle_label
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     vehicle_type = (vehicle_type or "car").strip().lower()
-    vehicle_descriptor = _normalize_vehicle_for_prompt(car_model, vehicle_type)
+    vehicle_color = _vehicle_color_for_prompt(vehicle_type, color_name, color_note)
+    vehicle_descriptor = _normalize_vehicle_for_prompt(car_model, vehicle_type, vehicle_color)
     composition_key = (composition or "").strip().lower()
     composition_rule = COMPOSITION_RULES.get(composition_key, "Use a cropped, asymmetrical documentary composition.")
     vehicle_rule = VEHICLE_TYPE_RULES.get(vehicle_type, VEHICLE_TYPE_RULES["car"])
@@ -706,6 +723,7 @@ Selected inputs:
 - Tariff class: {basic_class or "not specified"}
 - Tariff code: {transport_code or "not specified"}
 - Vehicle type: {vehicle_type}
+- Vehicle color rule: {vehicle_color}
 - Vehicle to use: {vehicle_descriptor}
 - Composition: {composition or "not specified"}
 - Hero/model description: {model_description or "not provided"}
@@ -731,7 +749,7 @@ Photography style and angle: 1 sentence
 Final check before answering:
 - Correct selected vehicle is used.
 - Car models include latest body-year naming.
-- Motorcycle and tuk-tuk are red when selected.
+- Vehicle color follows the selected color rule exactly.
 - Impossible car-only compositions are not used for motorcycle or tuk-tuk.
 - If a phone appears, it is red.
 - No logos, no app UI, no text, no watermark.
