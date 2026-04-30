@@ -706,7 +706,7 @@ def call_openai(
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     vehicle_type = (vehicle_type or "car").strip().lower()
-    vehicle_color = _vehicle_color_for_prompt(vehicle_type, color_name, color_note)
+    vehicle_color = _vehicle_color_for_prompt(vehicle_type, color_name)
     vehicle_descriptor = _normalize_vehicle_for_prompt(car_model, vehicle_type, vehicle_color)
     composition_key = (composition or "").strip().lower()
     composition_rule = COMPOSITION_RULES.get(composition_key, "Use a cropped, asymmetrical documentary composition.")
