@@ -43,15 +43,21 @@ try:
 except ValueError:
     PORT = 8080
 ROOT = Path(__file__).resolve().parent
-OUTPUT_DIR = ROOT / "output" / "banners"
-GENERATED_DIR = ROOT / "output" / "generated"
-ZIP_DIR = ROOT / "output" / "archives"
-UNCROP_DIR = ROOT / "output" / "uncrop"
-VIDEO_DIR = ROOT / "output" / "videos"
+DEFAULT_DATA_ROOT = Path("/app/data") if Path("/app/data").exists() else ROOT
+DATA_ROOT = Path(os.getenv("YANGO_DATA_DIR", os.getenv("RAILWAY_VOLUME_MOUNT_PATH", str(DEFAULT_DATA_ROOT)))).expanduser()
+PERSISTENT_OUTPUT_ROOT = DATA_ROOT / "output" if DATA_ROOT != ROOT else ROOT / "output"
+EPHEMERAL_OUTPUT_ROOT = ROOT / "output"
+OUTPUT_DIR = EPHEMERAL_OUTPUT_ROOT / "banners"
+PERSISTENT_GENERATED_DIR = PERSISTENT_OUTPUT_ROOT / "generated"
+TEMP_GENERATED_DIR = EPHEMERAL_OUTPUT_ROOT / "generated"
+GENERATED_DIR = TEMP_GENERATED_DIR
+ZIP_DIR = EPHEMERAL_OUTPUT_ROOT / "archives"
+UNCROP_DIR = EPHEMERAL_OUTPUT_ROOT / "uncrop"
+VIDEO_DIR = EPHEMERAL_OUTPUT_ROOT / "videos"
 DEFAULT_PACKSHOT_VIDEO = ROOT / "assets" / "video" / "packshot.mp4"
-IMAGE_LIBRARY_FILE = ROOT / "output" / "image_library.json"
+IMAGE_LIBRARY_FILE = PERSISTENT_OUTPUT_ROOT / "image_library.json"
 IMAGE_LIBRARY_LOCK = threading.Lock()
-VIDEO_LIBRARY_FILE = ROOT / "output" / "video_library.json"
+VIDEO_LIBRARY_FILE = EPHEMERAL_OUTPUT_ROOT / "video_library.json"
 VIDEO_LIBRARY_LOCK = threading.Lock()
 BRAND_LOGO_TEXT = "YANGO"
 WEB_APP_BASIC_AUTH_USERNAME = os.getenv("WEB_APP_BASIC_AUTH_USERNAME", "").strip()
@@ -349,6 +355,7 @@ def is_request_authorized_by_cookie(cookie_header: str) -> bool:
 
 def _ensure_output_directories() -> None:
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    PERSISTENT_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ZIP_DIR.mkdir(parents=True, exist_ok=True)
     UNCROP_DIR.mkdir(parents=True, exist_ok=True)
@@ -1190,11 +1197,37 @@ def _resolve_output_url_to_path(url: str) -> Path:
     value = str(url or "").strip()
     if not value.startswith("/"):
         raise RuntimeError("Expected local output URL")
-    path = (ROOT / value.lstrip("/")).resolve()
-    output_root = (ROOT / "output").resolve()
-    if not str(path).startswith(str(output_root)):
+    if not value.startswith("/output/"):
+        raise RuntimeError("Expected local output URL")
+    path = _resolve_public_file_path(value)
+    if not _is_allowed_output_path(path):
         raise RuntimeError("Resolved path is outside output directory")
     return path
+
+
+def _is_allowed_output_path(path: Path) -> bool:
+    resolved = path.resolve()
+    output_roots = {
+        str(PERSISTENT_OUTPUT_ROOT.resolve()),
+        str(EPHEMERAL_OUTPUT_ROOT.resolve()),
+    }
+    return any(str(resolved).startswith(root) for root in output_roots)
+
+
+def _resolve_public_file_path(path: str) -> Path:
+    value = unquote(str(path or "").strip())
+    if value.startswith("/output/"):
+        relative_path = value.removeprefix("/output/")
+        if relative_path.startswith("generated/"):
+            persistent_path = (PERSISTENT_OUTPUT_ROOT / relative_path).resolve()
+            temp_path = (EPHEMERAL_OUTPUT_ROOT / relative_path).resolve()
+            local_path = persistent_path if persistent_path.exists() else temp_path
+        else:
+            local_path = (EPHEMERAL_OUTPUT_ROOT / relative_path).resolve()
+        if not _is_allowed_output_path(local_path):
+            raise RuntimeError("Resolved path is outside output directory")
+        return local_path
+    return (ROOT / value.lstrip("/")).resolve()
 
 
 def _ffmpeg_binary() -> str:
@@ -1476,11 +1509,32 @@ def generate_video_with_kling(image_url: str, prompt: str, headlines: Optional[l
 def _save_generated_image_bytes(image_bytes: bytes, *, prefix: str = "generated") -> str:
     _ensure_output_directories()
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"{prefix}_{stamp}.png"
+    unique_suffix = uuid.uuid4().hex[:8]
+    file_name = f"{prefix}_{stamp}_{unique_suffix}.png"
     file_path = GENERATED_DIR / file_name
     img = Image.open(BytesIO(image_bytes)).convert("RGB")
     img.save(file_path, format="PNG", optimize=True)
     return f"/output/generated/{file_name}"
+
+
+def _persist_image_for_library(image_url: str) -> str:
+    normalized_url = str(image_url or "").strip()
+    if not normalized_url:
+        raise ValueError("image_url is required")
+
+    raw = _read_image_bytes_from_url(normalized_url)
+    source_name = Path(urlparse(normalized_url).path).name
+    safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", source_name).strip("._") or ""
+    if not safe_name:
+        safe_name = f"saved_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+    safe_name = f"{Path(safe_name).stem or 'saved'}.png"
+
+    _ensure_output_directories()
+    file_path = PERSISTENT_GENERATED_DIR / safe_name
+    if not file_path.exists():
+        image = Image.open(BytesIO(raw)).convert("RGB")
+        image.save(file_path, format="PNG", optimize=True)
+    return f"/output/generated/{safe_name}"
 
 
 def _gemini_generate_image_bytes(
@@ -1618,13 +1672,13 @@ def _read_image_bytes_from_url(url: str) -> bytes:
     parsed = urlparse(url)
 
     if url.startswith("/"):
-        local_path = ROOT / unquote(url.lstrip("/"))
+        local_path = _resolve_public_file_path(url)
         if not local_path.exists():
             raise FileNotFoundError(f"Local image not found: {local_path}")
         return local_path.read_bytes()
 
     if parsed.scheme in {"http", "https"} and parsed.hostname in {"127.0.0.1", "localhost"}:
-        local_path = ROOT / unquote(parsed.path.lstrip("/"))
+        local_path = _resolve_public_file_path(parsed.path)
         if not local_path.exists():
             raise FileNotFoundError(f"Local image not found: {local_path}")
         return local_path.read_bytes()
@@ -1809,9 +1863,9 @@ def create_banners_zip(banner_urls: Iterable[str]) -> str:
         path_str = str(url or "").strip()
         if not path_str.startswith("/"):
             continue
-        local_path = (ROOT / path_str.lstrip("/")).resolve()
+        local_path = _resolve_public_file_path(path_str)
         # Safety: allow only project output files
-        if not str(local_path).startswith(str((ROOT / "output").resolve())):
+        if not str(local_path).startswith(str(EPHEMERAL_OUTPUT_ROOT.resolve())):
             continue
         if local_path.exists() and local_path.is_file():
             files.append(local_path)
@@ -2421,13 +2475,13 @@ def _fetch_image_from_url(url: str) -> Image.Image:
     parsed = urlparse(url)
 
     if url.startswith("/"):
-        local_path = ROOT / unquote(url.lstrip("/"))
+        local_path = _resolve_public_file_path(url)
         if not local_path.exists():
             raise FileNotFoundError(f"Local image not found: {local_path}")
         return Image.open(local_path).convert("RGB")
 
     if parsed.scheme in {"http", "https"} and parsed.hostname in {"127.0.0.1", "localhost"}:
-        local_path = ROOT / unquote(parsed.path.lstrip("/"))
+        local_path = _resolve_public_file_path(parsed.path)
         if not local_path.exists():
             raise FileNotFoundError(f"Local image not found: {local_path}")
         return Image.open(local_path).convert("RGB")
@@ -3225,6 +3279,12 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
+    def translate_path(self, path: str) -> str:
+        parsed_path = urlparse(path).path
+        if parsed_path.startswith("/output/"):
+            return str(_resolve_public_file_path(parsed_path))
+        return super().translate_path(path)
+
     def _send_json(self, status: int, payload: dict) -> None:
         data = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -3614,11 +3674,11 @@ class Handler(SimpleHTTPRequestHandler):
             if not banners:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "No supported sizes provided"})
                 return
+            persisted_image_url = _persist_image_for_library(image_url)
             library_image = _upsert_image_library_record(
-                image_url,
-                kind=_infer_library_kind_from_name(Path(urlparse(image_url).path).name),
-                banner_source_url=effective_image_url,
-                original_name=Path(urlparse(image_url).path).name,
+                persisted_image_url,
+                kind=_infer_library_kind_from_name(Path(urlparse(persisted_image_url).path).name),
+                original_name=Path(urlparse(persisted_image_url).path).name,
             )
             self._send_json(
                 HTTPStatus.OK,
