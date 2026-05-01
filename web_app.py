@@ -3519,13 +3519,14 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path == "/api/edit-image":
                 image_url = str(body.get("imageUrl", "")).strip()
                 edit_prompt = str(body.get("editPrompt", "")).strip()
+                reference_image_url = str(body.get("referenceImageUrl", "")).strip()
                 if not image_url:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "imageUrl is required"})
                     return
                 if not edit_prompt:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "editPrompt is required"})
                     return
-                edited_local_url = edit_image_with_gemini(image_url, edit_prompt)
+                edited_local_url = edit_image_with_gemini(image_url, edit_prompt, reference_image_url)
                 self._send_json(HTTPStatus.OK, {"image_local_url": edited_local_url})
                 return
 

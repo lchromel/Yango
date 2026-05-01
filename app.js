@@ -33,6 +33,43 @@ const BANNER_SIZES = [
   { value: "1080x1920", slotClass: "slot-1080x1920" },
   { value: "1200x1350", slotClass: "slot-1200x1350" },
 ];
+const BRANDING_REFERENCES = {
+  amharic: "./assets/branding/amharic.png",
+  azerbaijani: "./assets/branding/azerbaijani.png",
+  english: "./assets/branding/english.png",
+  french: "./assets/branding/french.png",
+  "oman-female": "./assets/branding/oman-female.png",
+  oman: "./assets/branding/oman.png",
+  portuguese: "./assets/branding/portuguese.png",
+  spanish: "./assets/branding/spanish.png",
+};
+const COUNTRY_BRANDING_REFERENCE = {
+  Angola: "portuguese",
+  Azerbaijan: "azerbaijani",
+  Benin: "french",
+  Bolivia: "spanish",
+  Botswana: "english",
+  Cameroon: "french",
+  Colombia: "spanish",
+  "DR of the Congo": "french",
+  Ethiopia: "amharic",
+  Ghana: "english",
+  Guatemala: "spanish",
+  Israel: "english",
+  "Ivory Coast": "french",
+  Morocco: "french",
+  Mozambique: "portuguese",
+  Namibia: "english",
+  Nepal: "english",
+  Oman: "oman",
+  Pakistan: "english",
+  Peru: "spanish",
+  "Saudi Arabia": "english",
+  Senegal: "french",
+  Venezuela: "spanish",
+  Zambia: "english",
+};
+const BUSINESS_CLASS_KEYWORDS = ["business", "premier", "elite"];
 
 const IMAGE_SHIFT_STEP_COUNT = 4;
 const IMAGE_SHIFT_MAX_PX = 150;
@@ -164,6 +201,9 @@ const promptInputEl = document.getElementById("promptInput");
 const promptBackBtn = document.getElementById("promptBackBtn");
 const promptApplyBtn = document.getElementById("promptApplyBtn");
 const promptRowEl = document.querySelector(".prompt-row");
+const quickActionRowEl = document.getElementById("quickActionRow");
+const seatbeltActionBtn = document.getElementById("seatbeltActionBtn");
+const brandingActionBtn = document.getElementById("brandingActionBtn");
 const topActionBtn = document.getElementById("topActionBtn");
 
 const uploadImageInputEl = document.getElementById("uploadImageInput");
@@ -314,6 +354,31 @@ function getTransportOptions() {
 
 function getSelectedTransport() {
   return getTransportOptions().find((item) => item.label === state.selectedTransportLabel) || null;
+}
+
+function isBusinessClassTransport(transport) {
+  const value = `${transport?.label || ""} ${transport?.basicClass || ""}`.toLowerCase();
+  return BUSINESS_CLASS_KEYWORDS.some((keyword) => value.includes(keyword));
+}
+
+function shouldUseOmanFemaleBranding() {
+  const transport = getSelectedTransport();
+  const text = `${transport?.label || ""} ${state.heroDescription || ""}`.toLowerCase();
+  return /\bfemale\b|\bwoman\b|\bwomen\b|\bgirl\b|девуш|женщ|женск/.test(text);
+}
+
+function getBrandingReferenceUrl() {
+  const transport = getSelectedTransport();
+  if (!state.imageUrl || !transport) return "";
+  if ((transport.vehicleType || "car") !== "car") return "";
+  if (state.selectedCountry === "UAE") return "";
+  if (isBusinessClassTransport(transport)) return "";
+
+  let referenceKey = COUNTRY_BRANDING_REFERENCE[state.selectedCountry] || "english";
+  if (state.selectedCountry === "Oman" && shouldUseOmanFemaleBranding()) {
+    referenceKey = "oman-female";
+  }
+  return BRANDING_REFERENCES[referenceKey] || BRANDING_REFERENCES.english;
 }
 
 function getAvailableCompositions() {
@@ -812,6 +877,19 @@ function renderUiState() {
   resultImageEl.src = state.imageUrl || "";
   resultImageEl.classList.toggle("hidden", !state.imageUrl);
   promptRowEl.classList.toggle("hidden", !state.imageUrl);
+  if (quickActionRowEl) {
+    const brandingReferenceUrl = getBrandingReferenceUrl();
+    quickActionRowEl.classList.toggle("hidden", !state.imageUrl);
+    if (seatbeltActionBtn) {
+      seatbeltActionBtn.disabled = state.generating || !state.imageUrl;
+    }
+    if (brandingActionBtn) {
+      brandingActionBtn.disabled = state.generating || !brandingReferenceUrl;
+      brandingActionBtn.title = brandingReferenceUrl
+        ? ""
+        : "Branding is disabled for UAE, moto, tuk-tuk, and business class.";
+    }
+  }
   if (promptBackBtn) {
     promptBackBtn.disabled = state.generating || !state.imageHistory.length;
   }
@@ -1755,6 +1833,71 @@ generateBtn.addEventListener("click", generatePrompt);
 if (generateVideoBtnEl) {
   generateVideoBtnEl.addEventListener("click", generateVideoFromPrompt);
 }
+
+async function applyQuickImageEdit(editPrompt, referenceImageUrl = "") {
+  if (!state.imageUrl) {
+    alert("GENERATE IMAGE FIRST");
+    return;
+  }
+  try {
+    state.generating = true;
+    renderUiState();
+    const response = await fetchWithTimeout("/api/edit-image", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        imageUrl: state.imageUrl,
+        editPrompt,
+        referenceImageUrl,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Edit failed");
+    const editedUrl = payload.image_local_url || "";
+    if (!editedUrl) throw new Error("Edited image URL missing");
+    if (state.imageUrl && state.imageUrl !== editedUrl) {
+      pushImageToHistory(state.imageUrl);
+    }
+    state.imageUrl = editedUrl;
+    state.bannerSourceImageUrl = editedUrl;
+    state.editPromptText = "";
+    state.videoPromptText = "";
+    state.videoRenderStatus = "No video yet.";
+    state.videoResultUrl = "";
+    invalidateRenderedBanners();
+    setSourceStatus("generated");
+    renderBannerSetsView();
+  } catch (error) {
+    alert(`ERROR: ${error.message || "EDIT FAILED"}`);
+  } finally {
+    state.generating = false;
+    renderUiState();
+  }
+}
+
+if (seatbeltActionBtn) {
+  seatbeltActionBtn.addEventListener("click", () => {
+    applyQuickImageEdit(
+      "Edit the current image so every visible person inside the car is wearing a clearly visible, physically correct seat belt. Preserve the same people, vehicle, composition, camera angle, clothing, lighting, location, and documentary photo style. Do not add logos, app UI, text, or watermarks."
+    );
+  });
+}
+
+if (brandingActionBtn) {
+  brandingActionBtn.addEventListener("click", () => {
+    const referenceImageUrl = getBrandingReferenceUrl();
+    if (!referenceImageUrl) {
+      alert("BRANDING IS DISABLED FOR THIS COUNTRY OR TARIFF");
+      return;
+    }
+    applyQuickImageEdit(
+      "Use the second image as the exact vehicle-branding reference. Apply realistic Yango car branding decals to the visible exterior panels of the car in the current image: the red side panel, white YANGO wordmark, black app-download block in the reference language, and small checkered marks. Match the reference layout, scale, perspective, curvature, reflections, and surface lighting so it looks physically printed on the same car. Preserve the same car, people, scene, composition, lighting, and photo realism. Do not brand motorcycles, tuk-tuks, UAE scenes, or business/premium cars. Do not add unrelated text, app UI, or watermarks.",
+      referenceImageUrl
+    );
+  });
+}
+
 promptApplyBtn.addEventListener("click", () => {
   (async () => {
     const editPrompt = state.editPromptText.trim();
