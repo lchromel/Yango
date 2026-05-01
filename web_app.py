@@ -171,8 +171,10 @@ COMPOSITION_RULES = {
         "Use warm natural daylight, realistic car-interior shadows, slight wide-angle perspective, layered foreground objects when appropriate, and no visible driver."
     ),
     "near the car": (
-        "Exterior lifestyle composition beside the selected vehicle, shot wide enough to show the car side or rear 3/4, the street, pavement, architecture, and local neighborhood context. "
-        "The character is near the car, walking past it, waiting beside it, or standing by an open rear door; the car remains clearly readable but the human action leads the story. "
+        "Exterior lifestyle composition beside the selected vehicle, shot wide enough to clearly show the side profile of the car or a clean rear 3/4 side view, plus the street, pavement, architecture, and local neighborhood context. "
+        "The character must be outside and next to the car, close to the side doors or rear quarter, walking past it, waiting beside it, holding belongings, checking a phone, or interacting near the closed vehicle. "
+        "All car doors and trunk must be fully closed; do not show anyone entering, exiting, leaning into, sitting in, or standing by an open door. "
+        "The car side must remain readable, with visible side panels, windows, door handles, wheels, and realistic reflections, while the human action leads the story. "
         "Use low-to-eye-level editorial framing, natural sunlight, real street shadows, lots of environmental detail, and a candid ride-hailing moment rather than a posed car ad."
     ),
     "getting into the car": (

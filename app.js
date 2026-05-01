@@ -233,6 +233,7 @@ const promptRowEl = document.querySelector(".prompt-row");
 const quickActionRowEl = document.getElementById("quickActionRow");
 const seatbeltActionBtn = document.getElementById("seatbeltActionBtn");
 const brandingActionBtn = document.getElementById("brandingActionBtn");
+const removeBackgroundPeopleActionBtn = document.getElementById("removeBackgroundPeopleActionBtn");
 const topActionBtn = document.getElementById("topActionBtn");
 
 const uploadImageInputEl = document.getElementById("uploadImageInput");
@@ -976,6 +977,9 @@ function renderUiState() {
       brandingActionBtn.title = brandingReferenceUrl
         ? ""
         : "Branding is disabled for UAE, moto, tuk-tuk, and business class.";
+    }
+    if (removeBackgroundPeopleActionBtn) {
+      removeBackgroundPeopleActionBtn.disabled = state.generating || !state.imageUrl;
     }
   }
   if (promptBackBtn) {
@@ -2221,6 +2225,14 @@ if (brandingActionBtn) {
     applyQuickImageEdit(
       "Use the second image as the exact vehicle-branding reference. Apply realistic Yango car branding decals to the visible exterior panels of the car in the current image: the red side panel, white YANGO wordmark, black app-download block in the reference language, and small checkered marks. Match the reference layout, scale, perspective, curvature, reflections, and surface lighting so it looks physically printed on the same car. Preserve the same car, people, scene, composition, lighting, and photo realism. Do not brand motorcycles, tuk-tuks, UAE scenes, or business/premium cars. Do not add unrelated text, app UI, or watermarks.",
       referenceImageUrl
+    );
+  });
+}
+
+if (removeBackgroundPeopleActionBtn) {
+  removeBackgroundPeopleActionBtn.addEventListener("click", () => {
+    applyQuickImageEdit(
+      "Edit the current image to remove all non-essential background people and crowds. Preserve the main character or main characters, the vehicle, composition, camera angle, clothing, lighting, location, and documentary photo realism. Reconstruct the background naturally with matching architecture, pavement, shadows, reflections, and depth of field. Do not remove the driver or passenger if they are part of the main ride-hailing story. Do not add logos, app UI, text, or watermarks."
     );
   });
 }
