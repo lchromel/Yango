@@ -1575,7 +1575,7 @@ def _gemini_generate_image_bytes(
             if data:
                 return base64.b64decode(data)
 
-    raise RuntimeError("Gemini returned no image data")
+    raise RuntimeError("Gemini did not return an edited image. Try another source image or run Generate again.")
 
 
 def generate_image_with_openai(prompt: str) -> tuple[str, str]:

@@ -959,7 +959,7 @@ function renderUiState() {
   promptRowEl.classList.toggle("hidden", !state.imageUrl);
   if (quickActionRowEl) {
     const brandingReferenceUrl = getBrandingReferenceUrl();
-    quickActionRowEl.classList.toggle("hidden", !state.imageUrl);
+    quickActionRowEl.classList.toggle("hidden", isEditStyle || !state.imageUrl);
     if (seatbeltActionBtn) {
       seatbeltActionBtn.disabled = state.generating || !state.imageUrl;
     }
@@ -2214,7 +2214,7 @@ if (editUploadImageBtnEl && editUploadImageInputEl) {
       if (!localUrl) throw new Error("Upload failed");
       state.editSourceImageUrl = localUrl;
       state.editSourceStatus = "uploaded";
-      state.imageUrl = localUrl;
+      state.imageUrl = "";
       state.bannerSourceImageUrl = "";
       state.basePromptText = "";
       state.editPromptText = "";
