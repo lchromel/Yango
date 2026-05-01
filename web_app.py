@@ -53,7 +53,7 @@ IMAGE_LIBRARY_FILE = ROOT / "output" / "image_library.json"
 IMAGE_LIBRARY_LOCK = threading.Lock()
 VIDEO_LIBRARY_FILE = ROOT / "output" / "video_library.json"
 VIDEO_LIBRARY_LOCK = threading.Lock()
-BRAND_LOGO_TEXT = "Yango"
+BRAND_LOGO_TEXT = "YANGO"
 WEB_APP_BASIC_AUTH_USERNAME = os.getenv("WEB_APP_BASIC_AUTH_USERNAME", "").strip()
 WEB_APP_BASIC_AUTH_PASSWORD = os.getenv("WEB_APP_BASIC_AUTH_PASSWORD", "")
 AUTH_COOKIE_NAME = "drive_perf_auth"
@@ -1664,24 +1664,48 @@ def _encode_multipart_form_data(fields: list[tuple[str, str]], files: list[tuple
     return body.getvalue(), boundary
 
 
-def uncrop_image_with_clipdrop(source_image_url: str, *, padding: int = 500) -> str:
+def _calculate_uncrop_extents(
+    width: int,
+    height: int,
+    *,
+    target_width: int = 2676,
+    target_height: int = 2068,
+) -> tuple[int, int, int, int]:
+    if width <= 0 or height <= 0:
+        raise ValueError("Image dimensions must be positive")
+    if width > target_width or height > target_height:
+        raise ValueError(f"Image {width}x{height} is larger than uncrop target {target_width}x{target_height}")
+
+    horizontal_extend = target_width - width
+    vertical_extend = target_height - height
+    left = horizontal_extend // 2
+    right = horizontal_extend - left
+    up = vertical_extend // 2
+    down = vertical_extend - up
+    return left, right, up, down
+
+
+def uncrop_image_with_clipdrop(source_image_url: str) -> str:
     clipdrop_key = os.getenv("CLIPDROP_API_KEY")
     if not clipdrop_key:
         raise RuntimeError("CLIPDROP_API_KEY is not set")
 
     raw = _read_image_bytes_from_url(source_image_url)
+    with Image.open(BytesIO(raw)) as source_image:
+        width, height = source_image.size
+    extend_left, extend_right, extend_up, extend_down = _calculate_uncrop_extents(width, height)
     source_hash = hashlib.sha256(raw).hexdigest()[:20]
     _ensure_output_directories()
-    file_name = f"uncrop_{source_hash}_{padding}.png"
+    file_name = f"uncrop_{source_hash}_{extend_left}_{extend_right}_{extend_up}_{extend_down}.png"
     file_path = UNCROP_DIR / file_name
     if file_path.exists():
         return f"/output/uncrop/{file_name}"
 
     fields = [
-        ("extend_left", str(padding)),
-        ("extend_right", str(padding)),
-        ("extend_up", str(padding)),
-        ("extend_down", str(padding)),
+        ("extend_left", str(extend_left)),
+        ("extend_right", str(extend_right)),
+        ("extend_up", str(extend_up)),
+        ("extend_down", str(extend_down)),
     ]
     files = [
         ("image_file", "source.png", raw, "image/png"),
@@ -3091,10 +3115,10 @@ def render_banner_images(
         if cached_record is not None:
             cached_banner_source_url = str(cached_record.get("banner_source_url", "")).strip()
         try:
-            if cached_banner_source_url:
+            if cached_banner_source_url and re.search(r"/uncrop_[0-9a-f]{20}_\d+_\d+_\d+_\d+\.png$", cached_banner_source_url):
                 effective_image_url = cached_banner_source_url
             else:
-                effective_image_url = uncrop_image_with_clipdrop(image_url, padding=650)
+                effective_image_url = uncrop_image_with_clipdrop(image_url)
                 update_image_library_banner_source(image_url, effective_image_url)
             source_image = _fetch_image_from_url(effective_image_url)
         except Exception:
