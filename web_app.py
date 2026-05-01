@@ -3228,6 +3228,7 @@ def render_banner_images(
     image_scale: float = 1.0,
     image_shift_x: int = 0,
     image_shift_y: int = 0,
+    banner_image_overrides: Optional[dict[tuple[int, str], dict]] = None,
 ) -> tuple[list[dict], str]:
     _ensure_output_directories()
 
@@ -3283,6 +3284,10 @@ def render_banner_images(
                 continue
             width, height = BANNER_SIZE_MAP[size_key]
             _ = (width, height)
+            override = (banner_image_overrides or {}).get((set_index, size_key), {})
+            render_image_scale = float(override.get("image_scale", image_scale))
+            render_image_shift_x = int(override.get("image_shift_x", image_shift_x))
+            render_image_shift_y = int(override.get("image_shift_y", image_shift_y))
 
             if normalized_layout not in {"photo", "black", "white"}:
                 normalized_layout = "photo"
@@ -3300,9 +3305,9 @@ def render_banner_images(
                 accent_color=accent_color,
                 badge_shift_x=badge_shift_x,
                 badge_shift_y=badge_shift_y,
-                image_scale=image_scale,
-                image_shift_x=image_shift_x,
-                image_shift_y=image_shift_y,
+                image_scale=render_image_scale,
+                image_shift_x=render_image_shift_x,
+                image_shift_y=render_image_shift_y,
             )
 
             file_name = f"banner_{normalized_layout}_set{set_index + 1}_{size_key}_{now}.png"
@@ -3704,6 +3709,39 @@ class Handler(SimpleHTTPRequestHandler):
                 image_shift_y = int(body.get("imageShiftY", 0) or 0)
             except (TypeError, ValueError):
                 image_shift_y = 0
+            raw_banner_overrides = body.get("bannerImageOverrides", [])
+            banner_image_overrides: dict[tuple[int, str], dict] = {}
+            if isinstance(raw_banner_overrides, list):
+                for raw_override in raw_banner_overrides:
+                    if not isinstance(raw_override, dict):
+                        continue
+                    try:
+                        override_set_index = int(raw_override.get("textSetIndex", raw_override.get("setIndex", 0)) or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    override_size = str(raw_override.get("size", "")).strip()
+                    if override_set_index < 0 or override_size not in BANNER_SIZE_MAP:
+                        continue
+                    try:
+                        override_scale = float(raw_override.get("imageScale", image_scale) or image_scale)
+                    except (TypeError, ValueError):
+                        override_scale = image_scale
+                    if override_scale > 10:
+                        override_scale = override_scale / 100.0
+                    override_scale = max(1.0, min(1.5, override_scale))
+                    try:
+                        override_shift_x = int(raw_override.get("imageShiftX", image_shift_x) or 0)
+                    except (TypeError, ValueError):
+                        override_shift_x = image_shift_x
+                    try:
+                        override_shift_y = int(raw_override.get("imageShiftY", image_shift_y) or 0)
+                    except (TypeError, ValueError):
+                        override_shift_y = image_shift_y
+                    banner_image_overrides[(override_set_index, override_size)] = {
+                        "image_scale": override_scale,
+                        "image_shift_x": override_shift_x,
+                        "image_shift_y": override_shift_y,
+                    }
             sizes = body.get("sizes", [])
             if not isinstance(sizes, list):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "sizes must be an array"})
@@ -3720,6 +3758,7 @@ class Handler(SimpleHTTPRequestHandler):
                 image_scale=image_scale,
                 image_shift_x=image_shift_x,
                 image_shift_y=image_shift_y,
+                banner_image_overrides=banner_image_overrides,
             )
             if not banners:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "No supported sizes provided"})

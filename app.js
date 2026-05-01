@@ -39,6 +39,10 @@ const BANNER_SIZES = [
   { value: "1080x1920", slotClass: "slot-1080x1920" },
   { value: "1200x1350", slotClass: "slot-1200x1350" },
 ];
+const BANNER_SIZE_LABELS = BANNER_SIZES.reduce((acc, item) => {
+  acc[item.value] = item.value;
+  return acc;
+}, {});
 const BRANDING_REFERENCES = {
   amharic: "./assets/branding/amharic.png",
   azerbaijani: "./assets/branding/azerbaijani.png",
@@ -151,6 +155,8 @@ const state = {
   imageScalePercent: 100,
   imageShiftXStep: 0,
   imageShiftYStep: 0,
+  activeBannerPositionKey: "",
+  bannerImageOverrides: {},
 };
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = IMAGE_REQUEST_TIMEOUT_MS) {
@@ -243,6 +249,9 @@ const layoutTypeRowEl = document.getElementById("layoutTypeRow");
 const imageScaleEl = document.getElementById("imageScale");
 const imageShiftXEl = document.getElementById("imageShiftX");
 const imageShiftYEl = document.getElementById("imageShiftY");
+const imageShiftScopeEl = document.getElementById("imageShiftScope");
+const useGlobalShiftBtnEl = document.getElementById("useGlobalShiftBtn");
+const resetBannerShiftBtnEl = document.getElementById("resetBannerShiftBtn");
 const textSetsWrapEl = document.getElementById("textSetsWrap");
 const addTextSetBtn = document.getElementById("addTextSetBtn");
 const renderBannersBtn = document.getElementById("renderBannersBtn");
@@ -1134,12 +1143,134 @@ function renderLayoutTypes() {
 }
 
 function renderShiftControls() {
-  if (imageScaleEl) imageScaleEl.value = String(state.imageScalePercent);
-  if (imageShiftXEl) imageShiftXEl.value = String(state.imageShiftXStep);
-  if (imageShiftYEl) imageShiftYEl.value = String(state.imageShiftYStep);
+  const values = getActiveImagePositionValues();
+  if (imageScaleEl) imageScaleEl.value = String(values.imageScalePercent);
+  if (imageShiftXEl) imageShiftXEl.value = String(values.imageShiftXStep);
+  if (imageShiftYEl) imageShiftYEl.value = String(values.imageShiftYStep);
+  const active = parseBannerPositionKey(state.activeBannerPositionKey);
+  if (imageShiftScopeEl) {
+    imageShiftScopeEl.textContent = active ? `Set ${active.setIndex + 1} · ${active.size}` : "Global";
+  }
+  if (resetBannerShiftBtnEl) {
+    resetBannerShiftBtnEl.classList.toggle("hidden", !active);
+    resetBannerShiftBtnEl.disabled = !active || !state.bannerImageOverrides[state.activeBannerPositionKey];
+  }
+  if (useGlobalShiftBtnEl) {
+    useGlobalShiftBtnEl.classList.toggle("hidden", !active);
+  }
   applySliderFill(imageScaleEl);
   applySliderFill(imageShiftXEl);
   applySliderFill(imageShiftYEl);
+}
+
+function makeBannerPositionKey(setIndex, size) {
+  return `${Number(setIndex) || 0}:${String(size || "").trim()}`;
+}
+
+function parseBannerPositionKey(key) {
+  const raw = String(key || "");
+  const separatorIndex = raw.indexOf(":");
+  if (separatorIndex < 1) return null;
+  const setIndex = Number(raw.slice(0, separatorIndex));
+  const size = raw.slice(separatorIndex + 1);
+  if (!Number.isInteger(setIndex) || setIndex < 0 || !BANNER_SIZE_LABELS[size]) return null;
+  return { setIndex, size };
+}
+
+function getGlobalImagePositionValues() {
+  return {
+    imageScalePercent: Number(state.imageScalePercent) || IMAGE_SCALE_MIN,
+    imageShiftXStep: clampShiftStep(Number(state.imageShiftXStep) || 0),
+    imageShiftYStep: clampShiftStep(Number(state.imageShiftYStep) || 0),
+  };
+}
+
+function normalizeImagePositionValues(values) {
+  const globalValues = getGlobalImagePositionValues();
+  const rawScale = Number(values?.imageScalePercent ?? values?.scalePercent ?? globalValues.imageScalePercent);
+  return {
+    imageScalePercent: Math.max(IMAGE_SCALE_MIN, Math.min(IMAGE_SCALE_MAX, Number.isFinite(rawScale) ? rawScale : globalValues.imageScalePercent)),
+    imageShiftXStep: clampShiftStep(Number(values?.imageShiftXStep ?? values?.xStep ?? globalValues.imageShiftXStep) || 0),
+    imageShiftYStep: clampShiftStep(Number(values?.imageShiftYStep ?? values?.yStep ?? globalValues.imageShiftYStep) || 0),
+  };
+}
+
+function getBannerImageOverride(key) {
+  if (!key || !state.bannerImageOverrides[key]) return null;
+  return normalizeImagePositionValues(state.bannerImageOverrides[key]);
+}
+
+function getActiveImagePositionValues() {
+  return getBannerImageOverride(state.activeBannerPositionKey) || getGlobalImagePositionValues();
+}
+
+function setActiveBannerPosition(setIndex, size) {
+  const key = makeBannerPositionKey(setIndex, size);
+  if (state.activeBannerPositionKey === key) return;
+  state.activeBannerPositionKey = key;
+  renderShiftControls();
+  renderBannerSetsView();
+}
+
+function updateActiveImagePosition(partialValues) {
+  const active = parseBannerPositionKey(state.activeBannerPositionKey);
+  if (!active) {
+    if (Object.prototype.hasOwnProperty.call(partialValues, "imageScalePercent")) {
+      state.imageScalePercent = partialValues.imageScalePercent;
+    }
+    if (Object.prototype.hasOwnProperty.call(partialValues, "imageShiftXStep")) {
+      state.imageShiftXStep = partialValues.imageShiftXStep;
+    }
+    if (Object.prototype.hasOwnProperty.call(partialValues, "imageShiftYStep")) {
+      state.imageShiftYStep = partialValues.imageShiftYStep;
+    }
+    return;
+  }
+  const currentValues = getBannerImageOverride(state.activeBannerPositionKey) || getGlobalImagePositionValues();
+  state.bannerImageOverrides[state.activeBannerPositionKey] = normalizeImagePositionValues({
+    ...currentValues,
+    ...partialValues,
+  });
+}
+
+function resetActiveBannerPosition() {
+  if (!parseBannerPositionKey(state.activeBannerPositionKey)) return;
+  delete state.bannerImageOverrides[state.activeBannerPositionKey];
+}
+
+function reindexBannerImageOverridesAfterRemove(removedSetIndex) {
+  const nextOverrides = {};
+  Object.entries(state.bannerImageOverrides || {}).forEach(([key, value]) => {
+    const parsed = parseBannerPositionKey(key);
+    if (!parsed || parsed.setIndex === removedSetIndex) return;
+    const nextSetIndex = parsed.setIndex > removedSetIndex ? parsed.setIndex - 1 : parsed.setIndex;
+    nextOverrides[makeBannerPositionKey(nextSetIndex, parsed.size)] = value;
+  });
+  state.bannerImageOverrides = nextOverrides;
+  const active = parseBannerPositionKey(state.activeBannerPositionKey);
+  if (!active || active.setIndex === removedSetIndex) {
+    state.activeBannerPositionKey = "";
+  } else if (active.setIndex > removedSetIndex) {
+    state.activeBannerPositionKey = makeBannerPositionKey(active.setIndex - 1, active.size);
+  }
+}
+
+function copyBannerImageOverridesToSet(fromSetIndex, toSetIndex) {
+  Object.entries(state.bannerImageOverrides || {}).forEach(([key, value]) => {
+    const parsed = parseBannerPositionKey(key);
+    if (!parsed || parsed.setIndex !== fromSetIndex) return;
+    state.bannerImageOverrides[makeBannerPositionKey(toSetIndex, parsed.size)] = { ...normalizeImagePositionValues(value) };
+  });
+}
+
+function markImagePositionChanged(hadRenderedBanners) {
+  renderShiftControls();
+  state.renderedBanners = [];
+  renderBannerSetsView();
+  renderTopAction();
+  if (hadRenderedBanners) {
+    scheduleBannerAutoRender();
+  }
 }
 
 function clampShiftStep(stepValue) {
@@ -1201,8 +1332,10 @@ function renderTextSetsEditor() {
       removeBtn.setAttribute("aria-label", `Remove set ${index + 1}`);
       removeBtn.addEventListener("click", () => {
         state.bannerTextSets.splice(index, 1);
+        reindexBannerImageOverridesAfterRemove(index);
         invalidateRenderedBanners();
         renderTextSetsEditor();
+        renderShiftControls();
         renderBannerSetsView();
         renderTopAction();
       });
@@ -1391,9 +1524,24 @@ function buildSetBannerMap() {
   return map;
 }
 
-function makeSlot(size, url, isLoading) {
+function makeSlot(size, url, isLoading, setIndex = 0) {
   const slot = document.createElement("div");
+  const key = makeBannerPositionKey(setIndex, size);
   slot.className = `banner-slot ${BANNER_SIZES.find((s) => s.value === size)?.slotClass || ""}`;
+  if (state.activeBannerPositionKey === key) slot.classList.add("is-active");
+  if (state.bannerImageOverrides[key]) slot.classList.add("has-position-override");
+  slot.setAttribute("tabindex", "0");
+  slot.setAttribute("role", "button");
+  slot.setAttribute("aria-label", `Edit image position for set ${setIndex + 1}, ${size}`);
+  slot.addEventListener("mouseenter", () => setActiveBannerPosition(setIndex, size));
+  slot.addEventListener("click", () => setActiveBannerPosition(setIndex, size));
+  slot.addEventListener("focus", () => setActiveBannerPosition(setIndex, size));
+  slot.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setActiveBannerPosition(setIndex, size);
+    }
+  });
   if (url) {
     const img = document.createElement("img");
     img.src = url;
@@ -1459,16 +1607,16 @@ function renderBannerSetsView() {
 
     const left = document.createElement("div");
     left.className = "banner-col-left";
-    left.appendChild(makeSlot("1200x1200", map.get(`${index}:1200x1200`), state.bannerRendering));
-    left.appendChild(makeSlot("1200x628", map.get(`${index}:1200x628`), state.bannerRendering));
+    left.appendChild(makeSlot("1200x1200", map.get(`${index}:1200x1200`), state.bannerRendering, index));
+    left.appendChild(makeSlot("1200x628", map.get(`${index}:1200x628`), state.bannerRendering, index));
 
     const mid = document.createElement("div");
     mid.className = "banner-col-mid";
-    mid.appendChild(makeSlot("1080x1920", map.get(`${index}:1080x1920`), state.bannerRendering));
+    mid.appendChild(makeSlot("1080x1920", map.get(`${index}:1080x1920`), state.bannerRendering, index));
 
     const right = document.createElement("div");
     right.className = "banner-col-right";
-    right.appendChild(makeSlot("1200x1350", map.get(`${index}:1200x1350`), state.bannerRendering));
+    right.appendChild(makeSlot("1200x1350", map.get(`${index}:1200x1350`), state.bannerRendering, index));
 
     const actions = document.createElement("div");
     actions.className = "banner-set-actions";
@@ -1679,6 +1827,20 @@ async function generateEditedSourceImage() {
 }
 
 function buildRenderPayload() {
+  const bannerImageOverrides = Object.entries(state.bannerImageOverrides || {})
+    .map(([key, values]) => {
+      const parsed = parseBannerPositionKey(key);
+      if (!parsed) return null;
+      const normalized = normalizeImagePositionValues(values);
+      return {
+        textSetIndex: parsed.setIndex,
+        size: parsed.size,
+        imageScale: normalized.imageScalePercent / 100,
+        imageShiftX: stepToShiftPx(normalized.imageShiftXStep),
+        imageShiftY: -stepToShiftPx(normalized.imageShiftYStep),
+      };
+    })
+    .filter(Boolean);
   return {
     imageUrl: state.bannerSourceImageUrl,
     imageScale: (Number(state.imageScalePercent) || 100) / 100,
@@ -1699,6 +1861,7 @@ function buildRenderPayload() {
     })),
     layoutType: state.bannerLayout,
     sizes: ["1200x1200", "1200x1350", "1200x628", "1080x1920"],
+    bannerImageOverrides,
   };
 }
 
@@ -2129,14 +2292,8 @@ renderBannersBtn.addEventListener("click", createBanners);
 if (imageShiftXEl) {
   imageShiftXEl.addEventListener("input", (event) => {
     const hadRenderedBanners = state.hasRenderedBanners;
-    state.imageShiftXStep = clampShiftStep(Number(event.target.value) || 0);
-    renderShiftControls();
-    state.renderedBanners = [];
-    renderBannerSetsView();
-    renderTopAction();
-    if (hadRenderedBanners) {
-      scheduleBannerAutoRender();
-    }
+    updateActiveImagePosition({ imageShiftXStep: clampShiftStep(Number(event.target.value) || 0) });
+    markImagePositionChanged(hadRenderedBanners);
   });
 }
 
@@ -2145,33 +2302,37 @@ if (imageScaleEl) {
     const hadRenderedBanners = state.hasRenderedBanners;
     const raw = Number(event.target.value);
     if (!Number.isFinite(raw)) {
-      state.imageScalePercent = IMAGE_SCALE_MIN;
+      updateActiveImagePosition({ imageScalePercent: IMAGE_SCALE_MIN });
     } else {
       const clamped = Math.max(IMAGE_SCALE_MIN, Math.min(IMAGE_SCALE_MAX, raw));
       const snapped = Math.round((clamped - IMAGE_SCALE_MIN) / IMAGE_SCALE_STEP) * IMAGE_SCALE_STEP + IMAGE_SCALE_MIN;
-      state.imageScalePercent = Math.max(IMAGE_SCALE_MIN, Math.min(IMAGE_SCALE_MAX, snapped));
+      updateActiveImagePosition({ imageScalePercent: Math.max(IMAGE_SCALE_MIN, Math.min(IMAGE_SCALE_MAX, snapped)) });
     }
-    renderShiftControls();
-    state.renderedBanners = [];
-    renderBannerSetsView();
-    renderTopAction();
-    if (hadRenderedBanners) {
-      scheduleBannerAutoRender();
-    }
+    markImagePositionChanged(hadRenderedBanners);
   });
 }
 
 if (imageShiftYEl) {
   imageShiftYEl.addEventListener("input", (event) => {
     const hadRenderedBanners = state.hasRenderedBanners;
-    state.imageShiftYStep = clampShiftStep(Number(event.target.value) || 0);
+    updateActiveImagePosition({ imageShiftYStep: clampShiftStep(Number(event.target.value) || 0) });
+    markImagePositionChanged(hadRenderedBanners);
+  });
+}
+
+if (resetBannerShiftBtnEl) {
+  resetBannerShiftBtnEl.addEventListener("click", () => {
+    const hadRenderedBanners = state.hasRenderedBanners;
+    resetActiveBannerPosition();
+    markImagePositionChanged(hadRenderedBanners);
+  });
+}
+
+if (useGlobalShiftBtnEl) {
+  useGlobalShiftBtnEl.addEventListener("click", () => {
+    state.activeBannerPositionKey = "";
     renderShiftControls();
-    state.renderedBanners = [];
     renderBannerSetsView();
-    renderTopAction();
-    if (hadRenderedBanners) {
-      scheduleBannerAutoRender();
-    }
   });
 }
 
@@ -2289,6 +2450,7 @@ if (uploadVideoBtnEl && uploadVideoInputEl) {
 }
 
 addTextSetBtn.addEventListener("click", () => {
+  const sourceIndex = state.bannerTextSets.length - 1;
   const sourceSet =
     state.bannerTextSets.length > 0
       ? state.bannerTextSets[state.bannerTextSets.length - 1]
@@ -2303,6 +2465,7 @@ addTextSetBtn.addEventListener("click", () => {
           badgeShiftY: 0,
         };
 
+  const nextSetIndex = state.bannerTextSets.length;
   state.bannerTextSets.push({
     title: String(sourceSet.title || ""),
     subtitle: String(sourceSet.subtitle || ""),
@@ -2314,6 +2477,9 @@ addTextSetBtn.addEventListener("click", () => {
     badgeShiftX: Math.max(0, Math.min(100, Number(sourceSet.badgeShiftX) || 0)),
     badgeShiftY: Math.max(0, Math.min(100, Number(sourceSet.badgeShiftY) || 0)),
   });
+  if (sourceIndex >= 0) {
+    copyBannerImageOverridesToSet(sourceIndex, nextSetIndex);
+  }
   invalidateRenderedBanners();
   renderTextSetsEditor();
   renderBannerSetsView();
