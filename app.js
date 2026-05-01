@@ -1533,7 +1533,6 @@ function makeSlot(size, url, isLoading, setIndex = 0) {
   slot.setAttribute("tabindex", "0");
   slot.setAttribute("role", "button");
   slot.setAttribute("aria-label", `Edit image position for set ${setIndex + 1}, ${size}`);
-  slot.addEventListener("mouseenter", () => setActiveBannerPosition(setIndex, size));
   slot.addEventListener("click", () => setActiveBannerPosition(setIndex, size));
   slot.addEventListener("focus", () => setActiveBannerPosition(setIndex, size));
   slot.addEventListener("keydown", (event) => {
