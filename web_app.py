@@ -1550,19 +1550,46 @@ def _gemini_generate_image_bytes(
     if model == "gemini-2.5-flash-image-preview":
         model = "gemini-3.1-flash-image-preview"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    payload: dict = {"contents": [{"parts": parts}]}
-    generation_config: dict = {"responseModalities": ["TEXT", "IMAGE"]}
-    if aspect_ratio:
-        generation_config["imageConfig"] = {"aspectRatio": aspect_ratio}
-        if model in {"gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"}:
-            generation_config["imageConfig"]["imageSize"] = os.getenv("GEMINI_IMAGE_SIZE", "1K")
-    payload["generationConfig"] = generation_config
 
     headers = {
         "x-goog-api-key": api_key,
         "Content-Type": "application/json",
     }
-    response = _request_json(url, "POST", headers, payload)
+
+    def request_image(request_parts: list[dict], request_aspect_ratio: Optional[str]) -> tuple[Optional[bytes], list[dict]]:
+        payload: dict = {"contents": [{"parts": request_parts}]}
+        generation_config: dict = {"responseModalities": ["TEXT", "IMAGE"]}
+        if request_aspect_ratio:
+            generation_config["imageConfig"] = {"aspectRatio": request_aspect_ratio}
+        payload["generationConfig"] = generation_config
+
+        response = _request_json(url, "POST", headers, payload)
+        return _extract_gemini_image_bytes(response)
+
+    retry_parts = [dict(part) for part in parts]
+    if retry_parts and isinstance(retry_parts[0], dict) and "text" in retry_parts[0]:
+        retry_parts[0]["text"] = (
+            "Edit the provided image and return the edited image as the image output. "
+            "Do not call tools or functions. Do not answer with text only. "
+            f"{retry_parts[0]['text']}"
+        )
+
+    attempts = [
+        (parts, aspect_ratio),
+        (retry_parts, None),
+    ]
+    debug_details = []
+    for request_parts, request_aspect_ratio in attempts:
+        image_bytes, attempt_details = request_image(request_parts, request_aspect_ratio)
+        if image_bytes:
+            return image_bytes
+        debug_details.extend(attempt_details)
+
+    suffix = f" Details: {json.dumps(debug_details, ensure_ascii=False)[:1200]}" if debug_details else ""
+    raise RuntimeError(f"Gemini model {model} did not return an edited image.{suffix}")
+
+
+def _extract_gemini_image_bytes(response: dict) -> tuple[Optional[bytes], list[dict]]:
     candidates = response.get("candidates") or []
     debug_details = []
     for candidate in candidates:
@@ -1591,10 +1618,9 @@ def _gemini_generate_image_bytes(
                 continue
             data = inline.get("data")
             if data:
-                return base64.b64decode(data)
+                return base64.b64decode(data), debug_details
 
-    suffix = f" Details: {json.dumps(debug_details, ensure_ascii=False)[:1200]}" if debug_details else ""
-    raise RuntimeError(f"Gemini model {model} did not return an edited image.{suffix}")
+    return None, debug_details
 
 
 def generate_image_with_openai(prompt: str) -> tuple[str, str]:
