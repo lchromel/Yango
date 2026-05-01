@@ -1623,7 +1623,12 @@ def _request_json(url: str, method: str, headers: dict, payload: Optional[dict] 
     return json.loads(raw or "{}")
 
 
-def edit_image_with_gemini(source_image_url: str, edit_prompt: str, reference_image_url: str = "") -> str:
+def edit_image_with_gemini(
+    source_image_url: str,
+    edit_prompt: str,
+    reference_image_url: str = "",
+    aspect_ratio: str = "",
+) -> str:
     # Direct Gemini image editing (Nano Banana family).
     source_image = _fetch_image_from_url(source_image_url).convert("RGB")
     buf = BytesIO()
@@ -1640,7 +1645,8 @@ def edit_image_with_gemini(source_image_url: str, edit_prompt: str, reference_im
         reference_b64 = base64.b64encode(reference_buf.getvalue()).decode("ascii")
         parts.append({"inline_data": {"mime_type": "image/png", "data": reference_b64}})
     image_bytes = _gemini_generate_image_bytes(
-        parts=parts
+        parts=parts,
+        aspect_ratio=aspect_ratio.strip() or None,
     )
     return _save_generated_image_bytes(image_bytes, prefix="edited")
 
@@ -2618,6 +2624,7 @@ def _render_master_banner_by_size(
     *,
     bg_image: Optional[Image.Image],
     size_key: str,
+    layout_variant: str = "photo",
     title: str,
     subtitle: str,
     disclaimer: str,
@@ -2635,6 +2642,10 @@ def _render_master_banner_by_size(
     width, height = BANNER_SIZE_MAP[size_key]
     canvas = Image.new("RGBA", (width, height), "#d9d9d9")
     draw = ImageDraw.Draw(canvas, "RGBA")
+    variant = str(layout_variant or "photo").strip().lower()
+    show_gradients = variant == "photo"
+    main_text_fill = "#000000" if variant == "black" else "white"
+    disclaimer_rgb = (0, 0, 0) if variant == "black" else (255, 255, 255)
 
     headline_font_path = ROOT / "assets" / "fonts" / "YangoGroupHeadline-Heavy.ttf"
     headline_italic_font_path = ROOT / "assets" / "fonts" / "YangoGroupHeadline-HeavyItalic.ttf"
@@ -2667,9 +2678,10 @@ def _render_master_banner_by_size(
         )
         if bg_image is not None:
             canvas.paste(_resize_exact(bg_image, img_w, img_h).convert("RGBA"), (img_x, img_y))
-        _draw_top_diagonal_gradient(canvas, height=368, align=align_mode)
-        _draw_vertical_black_gradient(canvas, y=int(round(596.734)), height=int(round(603.266)), opacity=0.9)
-        _draw_vertical_black_gradient(canvas, y=int(round(721.414)), height=int(round(478.586)), opacity=0.75)
+        if show_gradients:
+            _draw_top_diagonal_gradient(canvas, height=368, align=align_mode)
+            _draw_vertical_black_gradient(canvas, y=int(round(596.734)), height=int(round(603.266)), opacity=0.9)
+            _draw_vertical_black_gradient(canvas, y=int(round(721.414)), height=int(round(478.586)), opacity=0.75)
 
         logo_font = _load_font(headline_italic_font_path, 113)
         title_font = _load_font(headline_font_path, 132)
@@ -2750,7 +2762,7 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, 80), BRAND_LOGO_TEXT, fill="white", font=logo_font)
+        draw.text((logo_x, 80), BRAND_LOGO_TEXT, fill=main_text_fill, font=logo_font)
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -2763,7 +2775,7 @@ def _render_master_banner_by_size(
                     "text": title_text.upper(),
                     "font": title_font,
                     "ratio": 0.9,
-                    "fill": "white",
+                    "fill": main_text_fill,
                     "gap_before": 0,
                     "wrap_width": 1033,
                     "align": align_mode,
@@ -2772,7 +2784,7 @@ def _render_master_banner_by_size(
                     "text": subtitle_text,
                     "font": subtitle_font,
                     "ratio": 1.1,
-                    "fill": "white",
+                    "fill": main_text_fill,
                     "gap_before": 48,
                     "wrap_width": 1033 if align_mode in {"center", "right"} else 1040,
                     "align": align_mode,
@@ -2781,7 +2793,7 @@ def _render_master_banner_by_size(
                     "text": disclaimer_text,
                     "font": disclaimer_font,
                     "ratio": 1.28,
-                    "fill": (255, 255, 255, 77),
+                    "fill": (*disclaimer_rgb, 77),
                     "gap_before": 40,
                     "wrap_width": 1040,
                     "align": align_mode,
@@ -2805,9 +2817,10 @@ def _render_master_banner_by_size(
         )
         if bg_image is not None:
             canvas.paste(_resize_exact(bg_image, img_w, img_h).convert("RGBA"), (img_x, img_y))
-        _draw_top_diagonal_gradient(canvas, height=368, align=align_mode)
-        _draw_vertical_black_gradient(canvas, y=int(round(height * 0.4973)), height=754, opacity=0.9)
-        _draw_vertical_black_gradient(canvas, y=int(round(height * 0.6012)), height=598, opacity=0.75)
+        if show_gradients:
+            _draw_top_diagonal_gradient(canvas, height=368, align=align_mode)
+            _draw_vertical_black_gradient(canvas, y=int(round(height * 0.4973)), height=754, opacity=0.9)
+            _draw_vertical_black_gradient(canvas, y=int(round(height * 0.6012)), height=598, opacity=0.75)
 
         logo_font = _load_font(headline_italic_font_path, 109)
         title_font = _load_font(headline_font_path, 132)
@@ -2888,7 +2901,7 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, 80), BRAND_LOGO_TEXT, fill="white", font=logo_font)
+        draw.text((logo_x, 80), BRAND_LOGO_TEXT, fill=main_text_fill, font=logo_font)
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -2901,7 +2914,7 @@ def _render_master_banner_by_size(
                     "text": title_text.upper(),
                     "font": title_font,
                     "ratio": 0.9,
-                    "fill": "white",
+                    "fill": main_text_fill,
                     "gap_before": 0,
                     "wrap_width": 1033,
                     "align": align_mode,
@@ -2910,7 +2923,7 @@ def _render_master_banner_by_size(
                     "text": subtitle_text,
                     "font": subtitle_font,
                     "ratio": 1.1,
-                    "fill": "white",
+                    "fill": main_text_fill,
                     "gap_before": 48,
                     "wrap_width": 1033 if align_mode in {"center", "right"} else 1040,
                     "align": align_mode,
@@ -2919,7 +2932,7 @@ def _render_master_banner_by_size(
                     "text": disclaimer_text,
                     "font": disclaimer_font,
                     "ratio": 1.28,
-                    "fill": (255, 255, 255, 77),
+                    "fill": (*disclaimer_rgb, 77),
                     "gap_before": 40,
                     "wrap_width": 1040,
                     "align": align_mode,
@@ -2943,10 +2956,11 @@ def _render_master_banner_by_size(
         )
         if bg_image is not None:
             canvas.paste(_resize_exact(bg_image, img_w, img_h).convert("RGBA"), (img_x, img_y))
-        # 1200x628: keep center alignment on the original (left) gradient profile.
-        grad_mode = "right" if align_mode == "right" else "left"
-        _draw_horizontal_black_gradient(canvas, width=965, opacity=0.9, mode=grad_mode)
-        _draw_horizontal_black_gradient(canvas, width=766, opacity=0.75, mode=grad_mode)
+        if show_gradients:
+            # 1200x628: keep center alignment on the original (left) gradient profile.
+            grad_mode = "right" if align_mode == "right" else "left"
+            _draw_horizontal_black_gradient(canvas, width=965, opacity=0.9, mode=grad_mode)
+            _draw_horizontal_black_gradient(canvas, width=766, opacity=0.75, mode=grad_mode)
         if badge_enabled:
             _draw_price_badge(
                 canvas,
@@ -2981,7 +2995,7 @@ def _render_master_banner_by_size(
                     "text": title_text.upper(),
                     "font": title_font,
                     "ratio": 0.9,
-                    "fill": "white",
+                    "fill": main_text_fill,
                     "gap_before": 0,
                     "wrap_width": 636,
                     "align": top_align,
@@ -2990,7 +3004,7 @@ def _render_master_banner_by_size(
                     "text": subtitle_text,
                     "font": subtitle_font,
                     "ratio": 1.1,
-                    "fill": "white",
+                    "fill": main_text_fill,
                     "gap_before": 48,
                     "wrap_width": 636,
                     "align": top_align,
@@ -3009,7 +3023,7 @@ def _render_master_banner_by_size(
             logo_x = width - 32 - logo_w
         else:
             logo_x = 32
-        draw.text((logo_x, logo_y), BRAND_LOGO_TEXT, fill="white", font=logo_font)
+        draw.text((logo_x, logo_y), BRAND_LOGO_TEXT, fill=main_text_fill, font=logo_font)
         disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, 511)
         disclaimer_h = _measure_multiline_with_ratio(
             draw,
@@ -3025,7 +3039,7 @@ def _render_master_banner_by_size(
             y=disclaimer_y,
             text=disclaimer_wrapped,
             font=disclaimer_font,
-            fill=(255, 255, 255, 128),
+            fill=(*disclaimer_rgb, 128),
             line_height_ratio=1.28,
             box_width=511,
             align="left" if align_mode == "right" else "right",
@@ -3046,8 +3060,9 @@ def _render_master_banner_by_size(
         )
         if bg_image is not None:
             canvas.paste(_resize_exact(bg_image, img_w, img_h).convert("RGBA"), (img_x, img_y))
-        _draw_vertical_black_gradient(canvas, y=955, height=965, opacity=0.9)
-        _draw_vertical_black_gradient(canvas, y=1154, height=766, opacity=0.75)
+        if show_gradients:
+            _draw_vertical_black_gradient(canvas, y=955, height=965, opacity=0.9)
+            _draw_vertical_black_gradient(canvas, y=1154, height=766, opacity=0.75)
 
         logo_font = _load_font(headline_italic_font_path, 109)
         title_font = _load_font(headline_font_path, 132)
@@ -3114,7 +3129,7 @@ def _render_master_banner_by_size(
             y=int(cursor_y),
             text=title_wrapped,
             font=title_font,
-            fill="white",
+            fill=main_text_fill,
             line_height_ratio=0.9,
             box_width=title_width,
             align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
@@ -3128,7 +3143,7 @@ def _render_master_banner_by_size(
             y=int(cursor_y),
             text=subtitle_wrapped,
             font=subtitle_font,
-            fill="white",
+            fill=main_text_fill,
             line_height_ratio=1.1,
             box_width=subtitle_width,
             align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
@@ -3141,7 +3156,7 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, int(cursor_y)), BRAND_LOGO_TEXT, fill="white", font=logo_font)
+        draw.text((logo_x, int(cursor_y)), BRAND_LOGO_TEXT, fill=main_text_fill, font=logo_font)
         cursor_y += logo_h + gap_logo_disclaimer
         _draw_multiline_with_ratio(
             canvas,
@@ -3150,7 +3165,7 @@ def _render_master_banner_by_size(
             y=int(cursor_y),
             text=disclaimer_wrapped,
             font=disclaimer_font,
-            fill=(255, 255, 255, 77),
+            fill=(*disclaimer_rgb, 77),
             line_height_ratio=1.28,
             box_width=disclaimer_width,
             align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
@@ -3190,7 +3205,7 @@ def render_banner_images(
             effective_image_url = str(image_url).strip()
             source_image = _fetch_image_from_url(image_url)
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
-    normalized_layout = (layout_type or "master-red").strip() or "master-red"
+    normalized_layout = (layout_type or "photo").strip().lower() or "photo"
 
     prepared_sets = list(text_sets or [])
     if not prepared_sets:
@@ -3224,42 +3239,26 @@ def render_banner_images(
             width, height = BANNER_SIZE_MAP[size_key]
             _ = (width, height)
 
-            if normalized_layout in {"master-red", "performance-red"}:
-                banner = _render_master_banner_by_size(
-                    bg_image=source_image,
-                    size_key=size_key,
-                    title=title,
-                    subtitle=subtitle,
-                    disclaimer=disclaimer,
-                    text_align=text_align,
-                    badge_enabled=badge_enabled,
-                    badge_top_text=badge_top_text,
-                    badge_bottom_text=badge_bottom_text,
-                    accent_color=accent_color,
-                    badge_shift_x=badge_shift_x,
-                    badge_shift_y=badge_shift_y,
-                    image_scale=image_scale,
-                    image_shift_x=image_shift_x,
-                    image_shift_y=image_shift_y,
-                )
-            else:
-                banner = _render_master_banner_by_size(
-                    bg_image=source_image,
-                    size_key=size_key,
-                    title=title,
-                    subtitle=subtitle,
-                    disclaimer=disclaimer,
-                    text_align=text_align,
-                    badge_enabled=badge_enabled,
-                    badge_top_text=badge_top_text,
-                    badge_bottom_text=badge_bottom_text,
-                    accent_color=accent_color,
-                    badge_shift_x=badge_shift_x,
-                    badge_shift_y=badge_shift_y,
-                    image_scale=image_scale,
-                    image_shift_x=image_shift_x,
-                    image_shift_y=image_shift_y,
-                )
+            if normalized_layout not in {"photo", "black", "white"}:
+                normalized_layout = "photo"
+            banner = _render_master_banner_by_size(
+                bg_image=source_image,
+                size_key=size_key,
+                layout_variant=normalized_layout,
+                title=title,
+                subtitle=subtitle,
+                disclaimer=disclaimer,
+                text_align=text_align,
+                badge_enabled=badge_enabled,
+                badge_top_text=badge_top_text,
+                badge_bottom_text=badge_bottom_text,
+                accent_color=accent_color,
+                badge_shift_x=badge_shift_x,
+                badge_shift_y=badge_shift_y,
+                image_scale=image_scale,
+                image_shift_x=image_shift_x,
+                image_shift_y=image_shift_y,
+            )
 
             file_name = f"banner_{normalized_layout}_set{set_index + 1}_{size_key}_{now}.png"
             file_path = OUTPUT_DIR / file_name
@@ -3580,13 +3579,19 @@ class Handler(SimpleHTTPRequestHandler):
                 image_url = str(body.get("imageUrl", "")).strip()
                 edit_prompt = str(body.get("editPrompt", "")).strip()
                 reference_image_url = str(body.get("referenceImageUrl", "")).strip()
+                aspect_ratio = str(body.get("aspectRatio", "")).strip()
                 if not image_url:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "imageUrl is required"})
                     return
                 if not edit_prompt:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "editPrompt is required"})
                     return
-                edited_local_url = edit_image_with_gemini(image_url, edit_prompt, reference_image_url)
+                edited_local_url = edit_image_with_gemini(
+                    image_url,
+                    edit_prompt,
+                    reference_image_url,
+                    aspect_ratio=aspect_ratio,
+                )
                 self._send_json(HTTPStatus.OK, {"image_local_url": edited_local_url})
                 return
 
@@ -3635,7 +3640,7 @@ class Handler(SimpleHTTPRequestHandler):
                         "disclaimer": str(body.get("disclaimer", "")).strip(),
                     }
                 ]
-            layout_type = str(body.get("layoutType", "master-red")).strip() or "master-red"
+            layout_type = str(body.get("layoutType", "photo")).strip() or "photo"
             try:
                 image_scale = float(body.get("imageScale", 1.0) or 1.0)
             except (TypeError, ValueError):

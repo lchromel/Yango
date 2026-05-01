@@ -1,7 +1,17 @@
 const VEHICLE_DATA_URL = "./assets/data/vehicles.json";
 const IMAGE_SERVICE = "Ride-hailing";
-const IMAGE_STYLE = "Photo";
+const IMAGE_STYLES = [
+  { label: "Photo", value: "photo" },
+  { label: "Edit", value: "edit" },
+];
 const IMAGE_REQUEST_TIMEOUT_MS = 8 * 60 * 1000;
+const EDIT_CLEANUP_PROMPT = [
+  "Remove every advertising/banner text element from the image: headlines, taglines, CTA text, price blocks, app-download copy, logo marks, brand logos, legal disclaimers, watermarks, badges, and decorative text that belongs to the ad layout.",
+  "Important exception: preserve text and UI that is physically part of a device screen, such as a phone app interface, map labels, buttons, or form fields inside the phone display.",
+  "Crop and recompose the result so the main subject, product, vehicle, phone, or app interface is large, centered, and fills the full frame with no leftover empty ad margins.",
+  "If removing text leaves gaps, reconstruct the background naturally using the original colors, lighting, shadows, perspective, and texture.",
+  "Keep the useful subject matter from the source image, preserve realistic edges and reflections, and output a clean image suitable as a source photo for new performance banners.",
+].join(" ");
 const COMPOSITION_PRESETS = [
   { label: "inside the car", vehicleTypes: ["car"] },
   { label: "near the car", vehicleTypes: ["car"] },
@@ -18,8 +28,8 @@ const COMPOSITION_PRESETS = [
 
 const BANNER_LAYOUTS = [
   { label: "Photo", value: "photo", disabled: false },
-  { label: "Black", value: "black", disabled: true },
-  { label: "Red", value: "master-red", disabled: true },
+  { label: "Black", value: "black", disabled: false },
+  { label: "White", value: "white", disabled: false },
 ];
 const TEXT_ALIGN_OPTIONS = [
   { value: "left", icon: "./assets/icons/text-align-left.svg", alt: "Align left" },
@@ -89,6 +99,8 @@ const state = {
   vehicleData: [],
   vehicleDataLoading: false,
   vehicleDataError: "",
+  selectedImageStyle: "photo",
+  styleMenuOpen: false,
   selectedCountry: "",
   selectedTransportLabel: "",
   countryMenuOpen: false,
@@ -98,6 +110,8 @@ const state = {
   situationDescription: "",
   basePromptText: "",
   editPromptText: "",
+  editSourceImageUrl: "",
+  editSourceStatus: "none",
   imageHistory: [],
   imageLibrary: [],
   imageUrl: "",
@@ -182,6 +196,10 @@ const countryToggleEl = document.getElementById("countryToggle");
 const countryDisplayEl = document.getElementById("countryDisplay");
 const countryChevronIconEl = document.getElementById("countryChevronIcon");
 const countryMenuEl = document.getElementById("countryMenu");
+const styleToggleEl = document.getElementById("styleToggle");
+const styleDisplayEl = document.getElementById("styleDisplay");
+const styleChevronIconEl = document.getElementById("styleChevronIcon");
+const styleMenuEl = document.getElementById("styleMenu");
 const transportToggleEl = document.getElementById("transportToggle");
 const transportDisplayEl = document.getElementById("transportDisplay");
 const transportChevronIconEl = document.getElementById("transportChevronIcon");
@@ -192,6 +210,14 @@ const heroDescriptionInputEl = document.getElementById("heroDescriptionInput");
 const situationDescriptionInputEl = document.getElementById("situationDescriptionInput");
 const bannerAccentColorInput = document.getElementById("bannerAccentColorInput");
 const generateBtn = document.getElementById("generateBtn");
+const photoStyleOnlyEls = Array.from(document.querySelectorAll(".photo-style-only"));
+const editSourceSectionEl = document.getElementById("editSourceSection");
+const editUploadImageBtnEl = document.getElementById("editUploadImageBtn");
+const editUploadImageInputEl = document.getElementById("editUploadImageInput");
+const editSourceStatusEl = document.getElementById("editSourceStatus");
+const editSelectedSourceBoxEl = document.getElementById("editSelectedSourceBox");
+const editSelectedSourcePreviewEl = document.getElementById("editSelectedSourcePreview");
+const editClearSourceBtnEl = document.getElementById("editClearSourceBtn");
 
 const loaderEl = document.getElementById("loader");
 const loaderLabelEl = document.getElementById("loaderLabel");
@@ -342,6 +368,10 @@ function setSourceStatusForImage(record) {
 
 function getCurrentCarModel() {
   return getSelectedTransport()?.model?.trim() || "";
+}
+
+function getSelectedImageStyle() {
+  return IMAGE_STYLES.find((item) => item.value === state.selectedImageStyle) || IMAGE_STYLES[0];
 }
 
 function getSelectedCountryRecord() {
@@ -615,6 +645,25 @@ function renderSelectedSource() {
     selected?.car_model || selected?.original_name || selected?.label || "Selected source image";
 }
 
+function renderEditSource() {
+  const isEditStyle = state.selectedImageStyle === "edit";
+  if (editSourceSectionEl) {
+    editSourceSectionEl.classList.toggle("hidden", !isEditStyle);
+  }
+  if (editSourceStatusEl) {
+    editSourceStatusEl.textContent = SOURCE_STATUS[state.editSourceStatus] || SOURCE_STATUS.none;
+  }
+  if (editSelectedSourceBoxEl && editSelectedSourcePreviewEl) {
+    const hasSource = Boolean(state.editSourceImageUrl);
+    editSelectedSourceBoxEl.classList.toggle("hidden", !hasSource);
+    if (hasSource) {
+      editSelectedSourcePreviewEl.src = state.editSourceImageUrl;
+    } else {
+      editSelectedSourcePreviewEl.removeAttribute("src");
+    }
+  }
+}
+
 async function fetchImageLibrary() {
   try {
     const response = await fetch("/api/library-images", {
@@ -752,6 +801,35 @@ function renderCountryControl() {
   });
 }
 
+function renderStyleControl() {
+  if (!styleDisplayEl || !styleToggleEl || !styleMenuEl) return;
+  const selected = getSelectedImageStyle();
+  styleDisplayEl.textContent = selected.label;
+  styleToggleEl.setAttribute("aria-expanded", state.styleMenuOpen ? "true" : "false");
+  if (styleChevronIconEl) {
+    styleChevronIconEl.src = state.styleMenuOpen
+      ? "./assets/icons/ChevronUpM.svg"
+      : "./assets/icons/ChevronDownM.svg";
+  }
+  styleMenuEl.classList.toggle("hidden", !state.styleMenuOpen);
+  styleMenuEl.innerHTML = "";
+  IMAGE_STYLES.forEach((style) => {
+    renderSelectOption(
+      styleMenuEl,
+      { label: style.label },
+      state.selectedImageStyle === style.value,
+      () => {
+        state.selectedImageStyle = style.value;
+        state.styleMenuOpen = false;
+        state.countryMenuOpen = false;
+        state.transportMenuOpen = false;
+        renderImageControls();
+        renderUiState();
+      }
+    );
+  });
+}
+
 function renderTransportControl() {
   if (!transportDisplayEl || !transportToggleEl || !transportMenuEl) return;
   const selected = getSelectedTransport();
@@ -845,6 +923,7 @@ function invalidateRenderedBanners(resetAutoRenderEligibility = true) {
 
 function renderUiState() {
   const isBusy = state.generating || state.bannerRendering || state.videoGenerating || state.videoRendering;
+  const isEditStyle = state.selectedImageStyle === "edit";
   loaderEl.classList.toggle("hidden", !isBusy);
   if (loaderLabelEl) {
     if (state.generating) {
@@ -861,7 +940,7 @@ function renderUiState() {
       loaderLabelEl.textContent = "Working";
     }
   }
-  generateBtn.disabled = state.generating || !state.selectedCountry || !getSelectedTransport();
+  generateBtn.disabled = state.generating || (isEditStyle ? !state.editSourceImageUrl : (!state.selectedCountry || !getSelectedTransport()));
   renderBannersBtn.disabled = state.bannerRendering || !state.bannerSourceImageUrl;
   if (generateVideoBtnEl) {
     const selectedSavedVideo = findLibraryVideoByUrl(state.videoResultUrl);
@@ -873,6 +952,7 @@ function renderUiState() {
   renderTabs();
   renderTopAction();
   renderImageControls();
+  renderEditSource();
   imagePreviewFrameEl.classList.remove("hidden");
   resultImageEl.src = state.imageUrl || "";
   resultImageEl.classList.toggle("hidden", !state.imageUrl);
@@ -966,6 +1046,18 @@ function renderCompositions() {
 }
 
 function renderImageControls() {
+  const isEditStyle = state.selectedImageStyle === "edit";
+  renderStyleControl();
+  photoStyleOnlyEls.forEach((element) => {
+    element.classList.toggle("hidden", isEditStyle);
+  });
+  if (isEditStyle) {
+    state.countryMenuOpen = false;
+    state.transportMenuOpen = false;
+    if (countryMenuEl) countryMenuEl.classList.add("hidden");
+    if (transportMenuEl) transportMenuEl.classList.add("hidden");
+    return;
+  }
   renderCountryControl();
   renderTransportControl();
   renderCompositions();
@@ -1466,6 +1558,11 @@ async function uploadCustomVideo(file) {
 }
 
 async function generatePrompt() {
+  if (state.selectedImageStyle === "edit") {
+    await generateEditedSourceImage();
+    return;
+  }
+
   const selectedTransport = getSelectedTransport();
   if (!state.selectedCountry) {
     alert("PLEASE SELECT COUNTRY");
@@ -1497,7 +1594,7 @@ async function generatePrompt() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         service: IMAGE_SERVICE,
-        style: IMAGE_STYLE,
+        style: getSelectedImageStyle().label,
         country: state.selectedCountry,
         transportLabel: selectedTransport.label,
         transportCode: selectedTransport.tariffCode,
@@ -1532,6 +1629,56 @@ async function generatePrompt() {
   }
 }
 
+async function generateEditedSourceImage() {
+  if (!state.editSourceImageUrl) {
+    alert("UPLOAD SOURCE IMAGE FIRST");
+    return;
+  }
+
+  const previousImageUrl = state.imageUrl;
+  state.generating = true;
+  state.basePromptText = EDIT_CLEANUP_PROMPT;
+  state.editPromptText = "";
+  state.videoPromptText = "";
+  state.videoRenderStatus = "No video yet.";
+  state.videoResultUrl = "";
+  state.imageUrl = "";
+  invalidateRenderedBanners();
+  setSourceStatus("uploading");
+  renderUiState();
+  renderBannerSetsView();
+
+  try {
+    const response = await fetchWithTimeout("/api/edit-image", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        imageUrl: state.editSourceImageUrl,
+        editPrompt: EDIT_CLEANUP_PROMPT,
+        aspectRatio: "3:2",
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Edit failed");
+    const editedUrl = payload.image_local_url || "";
+    if (!editedUrl) throw new Error("Edited image URL missing");
+    if (previousImageUrl && previousImageUrl !== editedUrl) {
+      pushImageToHistory(previousImageUrl);
+    }
+    state.imageUrl = editedUrl;
+    state.bannerSourceImageUrl = editedUrl;
+    setSourceStatus("generated");
+  } catch (error) {
+    alert(`ERROR: ${error.message || "EDIT FAILED"}`);
+    setSourceStatus("failed");
+  } finally {
+    state.generating = false;
+    renderBannerSetsView();
+    renderUiState();
+  }
+}
+
 function buildRenderPayload() {
   return {
     imageUrl: state.bannerSourceImageUrl,
@@ -1551,7 +1698,7 @@ function buildRenderPayload() {
       badgeShiftX: Math.max(0, Math.min(100, Number(set.badgeShiftX) || 0)),
       badgeShiftY: Math.max(0, Math.min(100, Number(set.badgeShiftY) || 0)),
     })),
-    layoutType: "photo",
+    layoutType: state.bannerLayout,
     sizes: ["1200x1200", "1200x1350", "1200x628", "1080x1920"],
   };
 }
@@ -1781,13 +1928,24 @@ if (tabVideoEl) {
 countryToggleEl.addEventListener("click", () => {
   state.countryMenuOpen = !state.countryMenuOpen;
   state.transportMenuOpen = false;
+  state.styleMenuOpen = false;
   renderImageControls();
 });
+
+if (styleToggleEl) {
+  styleToggleEl.addEventListener("click", () => {
+    state.styleMenuOpen = !state.styleMenuOpen;
+    state.countryMenuOpen = false;
+    state.transportMenuOpen = false;
+    renderImageControls();
+  });
+}
 
 transportToggleEl.addEventListener("click", () => {
   if (!state.selectedCountry) return;
   state.transportMenuOpen = !state.transportMenuOpen;
   state.countryMenuOpen = false;
+  state.styleMenuOpen = false;
   renderImageControls();
 });
 
@@ -1798,14 +1956,17 @@ document.addEventListener("click", (event) => {
     target instanceof Node &&
     (countryToggleEl.contains(target) ||
       countryMenuEl.contains(target) ||
+      styleToggleEl?.contains(target) ||
+      styleMenuEl?.contains(target) ||
       transportToggleEl.contains(target) ||
       transportMenuEl.contains(target))
   ) {
     return;
   }
-  if (state.countryMenuOpen || state.transportMenuOpen) {
+  if (state.countryMenuOpen || state.transportMenuOpen || state.styleMenuOpen) {
     state.countryMenuOpen = false;
     state.transportMenuOpen = false;
+    state.styleMenuOpen = false;
     renderImageControls();
   }
 });
@@ -2039,6 +2200,53 @@ uploadImageInputEl.addEventListener("change", async (event) => {
     uploadImageInputEl.value = "";
   }
 });
+
+if (editUploadImageBtnEl && editUploadImageInputEl) {
+  editUploadImageBtnEl.addEventListener("click", () => editUploadImageInputEl.click());
+  editUploadImageInputEl.addEventListener("change", async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    state.editSourceStatus = "uploading";
+    renderEditSource();
+    renderUiState();
+    try {
+      const localUrl = await uploadCustomImage(file);
+      if (!localUrl) throw new Error("Upload failed");
+      state.editSourceImageUrl = localUrl;
+      state.editSourceStatus = "uploaded";
+      state.imageUrl = localUrl;
+      state.bannerSourceImageUrl = "";
+      state.basePromptText = "";
+      state.editPromptText = "";
+      state.videoPromptText = "";
+      state.videoRenderStatus = "No video yet.";
+      state.videoResultUrl = "";
+      invalidateRenderedBanners();
+      renderBannerSetsView();
+      renderUiState();
+    } catch (error) {
+      state.editSourceStatus = "failed";
+      alert(`ERROR: ${error.message || "UPLOAD FAILED"}`);
+      renderUiState();
+    } finally {
+      editUploadImageInputEl.value = "";
+    }
+  });
+}
+
+if (editClearSourceBtnEl) {
+  editClearSourceBtnEl.addEventListener("click", () => {
+    state.editSourceImageUrl = "";
+    state.editSourceStatus = "none";
+    if (state.selectedImageStyle === "edit") {
+      state.imageUrl = "";
+      state.bannerSourceImageUrl = "";
+      invalidateRenderedBanners();
+      renderBannerSetsView();
+    }
+    renderUiState();
+  });
+}
 
 if (uploadVideoBtnEl && uploadVideoInputEl) {
   uploadVideoBtnEl.addEventListener("click", () => uploadVideoInputEl.click());

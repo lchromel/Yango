@@ -28,10 +28,41 @@
 
             <section class="section select-section">
               <p class="field-label">Style:</p>
-              <p class="static-field-value">Photo</p>
+              <div class="select-wrap">
+                <button id="styleToggle" class="select-toggle" type="button" aria-expanded="false">
+                  <span id="styleDisplay" class="select-display">Photo</span>
+                  <img
+                    id="styleChevronIcon"
+                    class="select-chevron-icon"
+                    src="./assets/icons/ChevronDownM.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+                <div id="styleMenu" class="select-menu hidden"></div>
+              </div>
             </section>
 
-            <section class="section select-section">
+            <section id="editSourceSection" class="section source-section hidden">
+              <div class="source-left">
+                <p class="field-label">Source Image:</p>
+                <p id="editSourceStatus" class="source-status">Status</p>
+              </div>
+              <button id="editUploadImageBtn" class="upload-icon-btn" type="button" aria-label="Upload source image">
+                <img class="upload-icon" src="./assets/icons/Upload.svg" alt="" aria-hidden="true" />
+              </button>
+              <div id="editSelectedSourceBox" class="selected-source hidden">
+                <div class="selected-source-preview-wrap">
+                  <img id="editSelectedSourcePreview" class="selected-source-preview" alt="Selected edit source image" />
+                </div>
+                <button id="editClearSourceBtn" class="clear-source-btn" type="button" aria-label="Clear selected edit source">
+                  <span class="clear-source-glyph" aria-hidden="true"></span>
+                </button>
+              </div>
+              <input id="editUploadImageInput" class="file-input-hidden" type="file" accept="image/png,image/jpeg,image/webp" />
+            </section>
+
+            <section class="section select-section photo-style-only">
               <p class="field-label">Country:</p>
               <div class="select-wrap">
                 <button id="countryToggle" class="select-toggle" type="button" aria-expanded="false">
@@ -48,7 +79,7 @@
               </div>
             </section>
 
-            <section class="section select-section">
+            <section class="section select-section photo-style-only">
               <p class="field-label">Transport:</p>
               <div class="select-wrap">
                 <button id="transportToggle" class="select-toggle" type="button" aria-expanded="false">
@@ -65,17 +96,17 @@
               </div>
             </section>
 
-            <section id="compositionSection" class="section hidden">
+            <section id="compositionSection" class="section photo-style-only hidden">
               <p class="field-label">Composition</p>
               <div id="compositionRow" class="angle-row"></div>
             </section>
 
-            <section class="section">
+            <section class="section photo-style-only">
               <label class="field-label" for="heroDescriptionInput">Hero</label>
               <textarea id="heroDescriptionInput" class="text-area image-text-area" rows="2" placeholder="Describe the model"></textarea>
             </section>
 
-            <section class="section">
+            <section class="section photo-style-only">
               <label class="field-label" for="situationDescriptionInput">Situation</label>
               <textarea id="situationDescriptionInput" class="text-area image-text-area" rows="3" placeholder="Describe what you want"></textarea>
             </section>
