@@ -6,8 +6,7 @@ const IMAGE_STYLES = [
 ];
 const IMAGE_REQUEST_TIMEOUT_MS = 8 * 60 * 1000;
 const EDIT_CLEANUP_PROMPT = [
-  "Remove the text block, logo, and disclaimer.",
-  "Crop out everything unnecessary so that the main subject is large, centered, and fills the entire frame.",
+  "убери текстовый блок, логотип и дисклеймер обрежь все лишнее чтобы суть была крупно по центру изображения и заполняло все пространство",
 ].join(" ");
 const COMPOSITION_PRESETS = [
   { label: "inside the car", vehicleTypes: ["car"] },
