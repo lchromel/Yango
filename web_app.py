@@ -1546,12 +1546,16 @@ def _gemini_generate_image_bytes(
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set")
 
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-image-preview")
+    model = os.getenv("GEMINI_MODEL", "").strip() or "gemini-3.1-flash-image-preview"
+    if model == "gemini-2.5-flash-image-preview":
+        model = "gemini-3.1-flash-image-preview"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload: dict = {"contents": [{"parts": parts}]}
-    generation_config: dict = {"responseModalities": ["IMAGE"]}
+    generation_config: dict = {"responseModalities": ["TEXT", "IMAGE"]}
     if aspect_ratio:
         generation_config["imageConfig"] = {"aspectRatio": aspect_ratio}
+        if model in {"gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"}:
+            generation_config["imageConfig"]["imageSize"] = os.getenv("GEMINI_IMAGE_SIZE", "1K")
     payload["generationConfig"] = generation_config
 
     headers = {
@@ -1560,7 +1564,18 @@ def _gemini_generate_image_bytes(
     }
     response = _request_json(url, "POST", headers, payload)
     candidates = response.get("candidates") or []
+    debug_details = []
     for candidate in candidates:
+        if isinstance(candidate, dict):
+            detail = {}
+            finish_reason = candidate.get("finishReason")
+            if finish_reason:
+                detail["finishReason"] = finish_reason
+            safety_ratings = candidate.get("safetyRatings")
+            if safety_ratings:
+                detail["safetyRatings"] = safety_ratings
+            if detail:
+                debug_details.append(detail)
         content = candidate.get("content") if isinstance(candidate, dict) else None
         cand_parts = (content or {}).get("parts") if isinstance(content, dict) else None
         if not isinstance(cand_parts, list):
@@ -1568,6 +1583,9 @@ def _gemini_generate_image_bytes(
         for part in cand_parts:
             if not isinstance(part, dict):
                 continue
+            text = str(part.get("text") or "").strip()
+            if text:
+                debug_details.append({"text": text[:500]})
             inline = part.get("inlineData") or part.get("inline_data")
             if not isinstance(inline, dict):
                 continue
@@ -1575,7 +1593,8 @@ def _gemini_generate_image_bytes(
             if data:
                 return base64.b64decode(data)
 
-    raise RuntimeError("Gemini did not return an edited image. Try another source image or run Generate again.")
+    suffix = f" Details: {json.dumps(debug_details, ensure_ascii=False)[:1200]}" if debug_details else ""
+    raise RuntimeError(f"Gemini model {model} did not return an edited image.{suffix}")
 
 
 def generate_image_with_openai(prompt: str) -> tuple[str, str]:

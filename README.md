@@ -49,7 +49,8 @@ python bot.py
 
 Для веб-версии нужны:
 - `OPENAI_API_KEY` (генерация детального промта и первичного изображения через GPT Image)
-- `GEMINI_API_KEY` (редактирование изображения через Nano Banana / Gemini image)
+- `GEMINI_API_KEY` (редактирование изображения через Nano Banana 2 / Gemini image)
+- `GEMINI_MODEL` опционально; по умолчанию используется `gemini-3.1-flash-image-preview`
 
 Запуск:
 
