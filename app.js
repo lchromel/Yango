@@ -2170,6 +2170,9 @@ async function applyQuickImageEdit(editPrompt, referenceImageUrl = "") {
     alert("GENERATE IMAGE FIRST");
     return;
   }
+  const resolvedReferenceImageUrl = referenceImageUrl
+    ? new URL(referenceImageUrl, window.location.href).href
+    : "";
   try {
     state.generating = true;
     renderUiState();
@@ -2180,7 +2183,7 @@ async function applyQuickImageEdit(editPrompt, referenceImageUrl = "") {
       body: JSON.stringify({
         imageUrl: state.imageUrl,
         editPrompt,
-        referenceImageUrl,
+        referenceImageUrl: resolvedReferenceImageUrl,
       }),
     });
     const payload = await response.json();

@@ -1728,7 +1728,7 @@ def _save_generated_image_local(remote_url: str) -> str:
 def _read_image_bytes_from_url(url: str) -> bytes:
     parsed = urlparse(url)
 
-    if url.startswith("/"):
+    if url.startswith("/") or (not parsed.scheme and not url.startswith("data:")):
         local_path = _resolve_public_file_path(url)
         if not local_path.exists():
             raise FileNotFoundError(f"Local image not found: {local_path}")
@@ -2545,7 +2545,7 @@ def _layout_bottom_blocks(
 def _fetch_image_from_url(url: str) -> Image.Image:
     parsed = urlparse(url)
 
-    if url.startswith("/"):
+    if url.startswith("/") or (not parsed.scheme and not url.startswith("data:")):
         local_path = _resolve_public_file_path(url)
         if not local_path.exists():
             raise FileNotFoundError(f"Local image not found: {local_path}")
