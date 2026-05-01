@@ -6,11 +6,8 @@ const IMAGE_STYLES = [
 ];
 const IMAGE_REQUEST_TIMEOUT_MS = 8 * 60 * 1000;
 const EDIT_CLEANUP_PROMPT = [
-  "Remove every advertising/banner text element from the image: headlines, taglines, CTA text, price blocks, app-download copy, logo marks, brand logos, legal disclaimers, watermarks, badges, and decorative text that belongs to the ad layout.",
-  "Important exception: preserve text and UI that is physically part of a device screen, such as a phone app interface, map labels, buttons, or form fields inside the phone display.",
-  "Crop and recompose the result so the main subject, product, vehicle, phone, or app interface is large, centered, and fills the full frame with no leftover empty ad margins.",
-  "If removing text leaves gaps, reconstruct the background naturally using the original colors, lighting, shadows, perspective, and texture.",
-  "Keep the useful subject matter from the source image, preserve realistic edges and reflections, and output a clean image suitable as a source photo for new performance banners.",
+  "Remove the text block, logo, and disclaimer.",
+  "Crop out everything unnecessary so that the main subject is large, centered, and fills the entire frame.",
 ].join(" ");
 const COMPOSITION_PRESETS = [
   { label: "inside the car", vehicleTypes: ["car"] },
