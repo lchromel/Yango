@@ -156,7 +156,8 @@ COMPOSITION_RULES = {
     "inside the car": (
         "Interior back-seat car composition with a wide editorial photo feel. "
         "Camera is inside the rear passenger area, angled across the back seat so the side window, door panel, roof liner, headrests, seat belts, and upholstery frame the subject. "
-        "Passenger(s) sit naturally in the back seat, relaxed or mid-gesture, with believable fashion/lifestyle styling and local city details visible through the window. "
+        "Passenger(s) sit naturally in the back seat, relaxed or mid-gesture, and every visible passenger must wear a clearly visible, physically correct seat belt. "
+        "Use believable fashion/lifestyle styling and local city details visible through the window. "
         "Use warm natural daylight, realistic car-interior shadows, slight wide-angle perspective, layered foreground objects when appropriate, and no visible driver."
     ),
     "near the car": (
@@ -173,13 +174,14 @@ COMPOSITION_RULES = {
     "passenger with driver": (
         "Interior ride-hailing interaction with both driver and passenger visible in the same frame when physically plausible. "
         "Frame from inside the car or through an open side door/window so the driver is in the front seat and the passenger(s) are in the back seat, sharing a natural conversation, greeting, laugh, or route moment. "
+        "Every visible person inside the car must wear a clearly visible, physically correct seat belt. "
         "Use dashboard/seat/door elements to create depth, allow slight foreground blur from steering wheel or door frame, and keep the mood candid, warm, and documentary rather than posed. "
         "The driver must remain clearly the driver, with hands or posture oriented toward driving, while the passenger remains clearly in the rear passenger area."
     ),
     "window": (
         "Window-focused exterior car composition shot from outside along the side of the vehicle. "
         "Frame the passenger through the rear side window, with the window opening, glass edge, B/C pillar, door handle, and car body forming the main graphic structure. "
-        "The passenger is inside the back seat, leaning on the window line, resting an arm on the lowered glass, looking out, or using a phone; the seat belt and interior should remain visible. "
+        "The passenger is inside the back seat, leaning on the window line, resting an arm on the lowered glass, looking out, or using a phone; a clearly visible, physically correct seat belt and interior should remain visible. "
         "Use realistic glass reflections of trees/buildings/sky, shallow depth between exterior street and interior passenger, and a close editorial crop that makes the window frame the subject. "
         "Do not make it a fully interior shot or a wide full-car exterior; the window and reflections must dominate the composition."
     ),
@@ -236,7 +238,8 @@ TUKTUK_COMPOSITION_RULES = {
 VEHICLE_TYPE_RULES = {
     "car": (
         "Use the selected car model exactly, with the selected color and latest body-year appended. "
-        "For interior scenes, passengers are in the back seat and the driver is never visible unless the composition explicitly asks for driver interaction."
+        "For interior scenes, passengers are in the back seat and the driver is never visible unless the composition explicitly asks for driver interaction. "
+        "Whenever any person is inside the car, every visible occupant must wear a clearly visible, physically correct seat belt."
     ),
     "moto": (
         "Use the selected motorcycle color. A driver is present unless the selected composition explicitly focuses only on the motorcycle context. "
@@ -1566,17 +1569,24 @@ def _request_json(url: str, method: str, headers: dict, payload: Optional[dict] 
     return json.loads(raw or "{}")
 
 
-def edit_image_with_gemini(source_image_url: str, edit_prompt: str) -> str:
+def edit_image_with_gemini(source_image_url: str, edit_prompt: str, reference_image_url: str = "") -> str:
     # Direct Gemini image editing (Nano Banana family).
     source_image = _fetch_image_from_url(source_image_url).convert("RGB")
     buf = BytesIO()
     source_image.save(buf, format="PNG")
     image_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    parts = [
+        {"text": edit_prompt},
+        {"inline_data": {"mime_type": "image/png", "data": image_b64}},
+    ]
+    if reference_image_url:
+        reference_image = _fetch_image_from_url(reference_image_url).convert("RGB")
+        reference_buf = BytesIO()
+        reference_image.save(reference_buf, format="PNG")
+        reference_b64 = base64.b64encode(reference_buf.getvalue()).decode("ascii")
+        parts.append({"inline_data": {"mime_type": "image/png", "data": reference_b64}})
     image_bytes = _gemini_generate_image_bytes(
-        parts=[
-            {"text": edit_prompt},
-            {"inline_data": {"mime_type": "image/png", "data": image_b64}},
-        ]
+        parts=parts
     )
     return _save_generated_image_bytes(image_bytes, prefix="edited")
 
