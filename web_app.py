@@ -1725,17 +1725,20 @@ def _save_generated_image_local(remote_url: str) -> str:
     return f"/output/generated/{file_name}"
 
 
-def _read_image_bytes_from_url(url: str) -> bytes:
+def _local_public_path_from_url(url: str) -> Optional[Path]:
     parsed = urlparse(url)
-
     if url.startswith("/") or (not parsed.scheme and not url.startswith("data:")):
-        local_path = _resolve_public_file_path(url)
-        if not local_path.exists():
-            raise FileNotFoundError(f"Local image not found: {local_path}")
-        return local_path.read_bytes()
+        return _resolve_public_file_path(url)
 
-    if parsed.scheme in {"http", "https"} and parsed.hostname in {"127.0.0.1", "localhost"}:
-        local_path = _resolve_public_file_path(parsed.path)
+    if parsed.scheme in {"http", "https"} and parsed.path.startswith(("/assets/", "/output/")):
+        return _resolve_public_file_path(parsed.path)
+
+    return None
+
+
+def _read_image_bytes_from_url(url: str) -> bytes:
+    local_path = _local_public_path_from_url(url)
+    if local_path is not None:
         if not local_path.exists():
             raise FileNotFoundError(f"Local image not found: {local_path}")
         return local_path.read_bytes()
@@ -2543,16 +2546,8 @@ def _layout_bottom_blocks(
 
 
 def _fetch_image_from_url(url: str) -> Image.Image:
-    parsed = urlparse(url)
-
-    if url.startswith("/") or (not parsed.scheme and not url.startswith("data:")):
-        local_path = _resolve_public_file_path(url)
-        if not local_path.exists():
-            raise FileNotFoundError(f"Local image not found: {local_path}")
-        return Image.open(local_path).convert("RGB")
-
-    if parsed.scheme in {"http", "https"} and parsed.hostname in {"127.0.0.1", "localhost"}:
-        local_path = _resolve_public_file_path(parsed.path)
+    local_path = _local_public_path_from_url(url)
+    if local_path is not None:
         if not local_path.exists():
             raise FileNotFoundError(f"Local image not found: {local_path}")
         return Image.open(local_path).convert("RGB")
