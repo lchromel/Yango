@@ -60,6 +60,10 @@ IMAGE_LIBRARY_LOCK = threading.Lock()
 VIDEO_LIBRARY_FILE = EPHEMERAL_OUTPUT_ROOT / "video_library.json"
 VIDEO_LIBRARY_LOCK = threading.Lock()
 BRAND_LOGO_TEXT = "YANGO"
+UNCROP_TARGET_WIDTH = 3200
+UNCROP_TARGET_HEIGHT = 2472
+UNCROP_MIN_HORIZONTAL_MARGIN = 262
+UNCROP_MIN_VERTICAL_MARGIN = 202
 WEB_APP_BASIC_AUTH_USERNAME = os.getenv("WEB_APP_BASIC_AUTH_USERNAME", "").strip()
 WEB_APP_BASIC_AUTH_PASSWORD = os.getenv("WEB_APP_BASIC_AUTH_PASSWORD", "")
 AUTH_COOKIE_NAME = "drive_perf_auth"
@@ -1783,13 +1787,13 @@ def _calculate_uncrop_extents(
     width: int,
     height: int,
     *,
-    target_width: int = 2676,
-    target_height: int = 2068,
+    target_width: int = UNCROP_TARGET_WIDTH,
+    target_height: int = UNCROP_TARGET_HEIGHT,
 ) -> tuple[int, int, int, int]:
     if width <= 0 or height <= 0:
         raise ValueError("Image dimensions must be positive")
-    if width > target_width or height > target_height:
-        raise ValueError(f"Image {width}x{height} is larger than uncrop target {target_width}x{target_height}")
+    target_width = max(target_width, width + (UNCROP_MIN_HORIZONTAL_MARGIN * 2))
+    target_height = max(target_height, height + (UNCROP_MIN_VERTICAL_MARGIN * 2))
 
     horizontal_extend = target_width - width
     vertical_extend = target_height - height
@@ -1798,6 +1802,20 @@ def _calculate_uncrop_extents(
     up = vertical_extend // 2
     down = vertical_extend - up
     return left, right, up, down
+
+
+def _is_cached_uncrop_current(image_url: str) -> bool:
+    if not re.search(r"/uncrop_[0-9a-f]{20}_\d+_\d+_\d+_\d+\.png$", str(image_url or "").strip()):
+        return False
+    try:
+        local_path = _resolve_public_file_path(image_url)
+        if not local_path.exists():
+            return False
+        with Image.open(local_path) as cached_image:
+            width, height = cached_image.size
+            return width >= UNCROP_TARGET_WIDTH and height >= UNCROP_TARGET_HEIGHT
+    except Exception:
+        return False
 
 
 def uncrop_image_with_clipdrop(source_image_url: str) -> str:
@@ -3240,7 +3258,7 @@ def render_banner_images(
         if cached_record is not None:
             cached_banner_source_url = str(cached_record.get("banner_source_url", "")).strip()
         try:
-            if cached_banner_source_url and re.search(r"/uncrop_[0-9a-f]{20}_\d+_\d+_\d+_\d+\.png$", cached_banner_source_url):
+            if cached_banner_source_url and _is_cached_uncrop_current(cached_banner_source_url):
                 effective_image_url = cached_banner_source_url
             else:
                 effective_image_url = uncrop_image_with_clipdrop(image_url)
