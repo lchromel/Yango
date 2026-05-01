@@ -102,6 +102,11 @@ body {
   cursor: pointer;
 }
 
+.tab-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 .tab-btn.is-active {
   background: #0e0e0e;
   color: var(--panel);

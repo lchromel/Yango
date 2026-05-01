@@ -90,6 +90,7 @@ const IMAGE_SCALE_STEP = 3;
 const BANNER_AUTO_RENDER_DEBOUNCE_MS = 550;
 const CUSTOM_ACCENT_TRIGGER_WINDOW_MS = 550;
 const CUSTOM_ACCENT_TRIGGER_TAP_COUNT = 3;
+const VIDEO_TAB_ENABLED = false;
 const ACCENT_PRESET_VALUES = {
   lime: "#E3FF74",
   red: "#FF1A1A",
@@ -867,11 +868,13 @@ function renderTransportControl() {
 function renderTabs() {
   const isImageTab = state.activeTab === "image";
   const isBannerTab = state.activeTab === "banner";
-  const isVideoTab = state.activeTab === "video";
+  const isVideoTab = VIDEO_TAB_ENABLED && state.activeTab === "video";
   tabImageEl.classList.toggle("is-active", isImageTab);
   tabBannerEl.classList.toggle("is-active", isBannerTab);
   if (tabVideoEl) {
     tabVideoEl.classList.toggle("is-active", isVideoTab);
+    tabVideoEl.disabled = !VIDEO_TAB_ENABLED;
+    tabVideoEl.setAttribute("aria-disabled", VIDEO_TAB_ENABLED ? "false" : "true");
   }
   tabImageEl.setAttribute("aria-selected", isImageTab ? "true" : "false");
   tabBannerEl.setAttribute("aria-selected", isBannerTab ? "true" : "false");
@@ -1907,6 +1910,11 @@ async function generateVideoFromPrompt() {
 }
 
 function setActiveTab(tab) {
+  if (tab === "video" && !VIDEO_TAB_ENABLED) {
+    state.activeTab = "image";
+    renderUiState();
+    return;
+  }
   state.activeTab = tab;
   renderUiState();
   if (tab === "banner") {
