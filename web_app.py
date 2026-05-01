@@ -53,6 +53,7 @@ IMAGE_LIBRARY_FILE = ROOT / "output" / "image_library.json"
 IMAGE_LIBRARY_LOCK = threading.Lock()
 VIDEO_LIBRARY_FILE = ROOT / "output" / "video_library.json"
 VIDEO_LIBRARY_LOCK = threading.Lock()
+BRAND_LOGO_TEXT = "Yango"
 WEB_APP_BASIC_AUTH_USERNAME = os.getenv("WEB_APP_BASIC_AUTH_USERNAME", "").strip()
 WEB_APP_BASIC_AUTH_PASSWORD = os.getenv("WEB_APP_BASIC_AUTH_PASSWORD", "")
 AUTH_COOKIE_NAME = "drive_perf_auth"
@@ -1316,7 +1317,7 @@ def _build_logo_overlay_filter(width: int, height: int) -> str:
     return (
         "drawtext="
         f"fontfile='{_ffmpeg_drawtext_path(logo_font)}':"
-        "text='YANGO DRIVE':"
+        f"text='{_escape_drawtext_value(BRAND_LOGO_TEXT)}':"
         f"fontsize={logo_font_size}:"
         "fontcolor=white@0.58:"
         f"x={logo_x}:y={logo_y}"
@@ -2653,7 +2654,7 @@ def _render_master_banner_by_size(
                 target_bottom_y=badge_target_bottom_y,
             )
 
-        logo_box = draw.textbbox((0, 0), "YANGO DRIVE", font=logo_font)
+        logo_box = draw.textbbox((0, 0), BRAND_LOGO_TEXT, font=logo_font)
         logo_w = max(1, logo_box[2] - logo_box[0])
         if align_mode == "center":
             logo_x = (width - logo_w) // 2
@@ -2661,7 +2662,7 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, 80), "YANGO DRIVE", fill="white", font=logo_font)
+        draw.text((logo_x, 80), BRAND_LOGO_TEXT, fill="white", font=logo_font)
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -2791,7 +2792,7 @@ def _render_master_banner_by_size(
                 target_bottom_y=badge_target_bottom_y,
             )
 
-        logo_box = draw.textbbox((0, 0), "YANGO DRIVE", font=logo_font)
+        logo_box = draw.textbbox((0, 0), BRAND_LOGO_TEXT, font=logo_font)
         logo_w = max(1, logo_box[2] - logo_box[0])
         if align_mode == "center":
             logo_x = (width - logo_w) // 2
@@ -2799,7 +2800,7 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, 80), "YANGO DRIVE", fill="white", font=logo_font)
+        draw.text((logo_x, 80), BRAND_LOGO_TEXT, fill="white", font=logo_font)
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -2909,7 +2910,7 @@ def _render_master_banner_by_size(
             ],
             highlight_hex=accent_hex,
         )
-        logo_box = draw.textbbox((0, 0), "YANGO DRIVE", font=logo_font)
+        logo_box = draw.textbbox((0, 0), BRAND_LOGO_TEXT, font=logo_font)
         logo_w = max(1, logo_box[2] - logo_box[0])
         logo_h = max(1, logo_box[3] - logo_box[1])
         bottom_padding = 32
@@ -2920,7 +2921,7 @@ def _render_master_banner_by_size(
             logo_x = width - 32 - logo_w
         else:
             logo_x = 32
-        draw.text((logo_x, logo_y), "YANGO DRIVE", fill="white", font=logo_font)
+        draw.text((logo_x, logo_y), BRAND_LOGO_TEXT, fill="white", font=logo_font)
         disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, 511)
         disclaimer_h = _measure_multiline_with_ratio(
             draw,
@@ -2974,7 +2975,7 @@ def _render_master_banner_by_size(
         title_h = _measure_multiline_with_ratio(draw, text=title_wrapped, font=title_font, line_height_ratio=0.9)
         subtitle_h = _measure_multiline_with_ratio(draw, text=subtitle_wrapped, font=subtitle_font, line_height_ratio=1.1)
         disclaimer_h = _measure_multiline_with_ratio(draw, text=disclaimer_wrapped, font=disclaimer_font, line_height_ratio=1.28)
-        logo_box = draw.textbbox((0, 0), "YANGO DRIVE", font=logo_font)
+        logo_box = draw.textbbox((0, 0), BRAND_LOGO_TEXT, font=logo_font)
         logo_w = max(1, logo_box[2] - logo_box[0])
         logo_h = max(1, logo_box[3] - logo_box[1])
 
@@ -3052,7 +3053,7 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, int(cursor_y)), "YANGO DRIVE", fill="white", font=logo_font)
+        draw.text((logo_x, int(cursor_y)), BRAND_LOGO_TEXT, fill="white", font=logo_font)
         cursor_y += logo_h + gap_logo_disclaimer
         _draw_multiline_with_ratio(
             canvas,
