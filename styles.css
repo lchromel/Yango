@@ -1127,23 +1127,23 @@ body {
 
 .source-library-filter {
   position: relative;
-  width: 178px;
+  width: 100%;
+  max-width: 178px;
 }
 
 .source-library-filter-toggle {
   width: 100%;
-  min-height: 30px;
-  border: 1px solid #0e0e0e;
-  border-radius: 999px;
+  min-height: 18px;
+  border: 0;
   background: transparent;
   color: #0e0e0e;
   font-family: "Yango Group Text", "Arial", sans-serif;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
   text-align: left;
   text-transform: uppercase;
-  padding: 8px 28px 8px 12px;
+  padding: 0 22px 0 0;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1153,7 +1153,7 @@ body {
 .source-library-filter-toggle::after {
   content: "";
   position: absolute;
-  right: 12px;
+  right: 2px;
   top: 50%;
   width: 7px;
   height: 7px;
