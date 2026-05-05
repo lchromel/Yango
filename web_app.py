@@ -405,6 +405,21 @@ def _infer_library_kind_from_name(file_name: str) -> str:
     return "uploaded"
 
 
+def _infer_library_kind_from_url(image_url: str) -> str:
+    path = urlparse(str(image_url or "").strip()).path.lower()
+    if "/generated/uploaded/" in path:
+        return "uploaded"
+    return _infer_library_kind_from_name(Path(path).name)
+
+
+def _normalize_image_country_bucket(country: str, *, fallback: str = "other") -> str:
+    value = str(country or "").strip()
+    if not value:
+        value = fallback
+    safe_value = re.sub(r"[^a-zA-Z0-9_-]+", "_", value).strip("_").lower()
+    return safe_value or fallback
+
+
 def _public_image_library_record(record: dict) -> dict:
     image_url = str(record.get("image_url", "")).strip()
     banner_source_url = str(record.get("banner_source_url", "")).strip()
@@ -420,6 +435,7 @@ def _public_image_library_record(record: dict) -> dict:
         "prompt": str(record.get("prompt", "")).strip(),
         "car_model": str(record.get("car_model", "")).strip(),
         "color_name": str(record.get("color_name", "")).strip(),
+        "country": str(record.get("country", "")).strip(),
         "original_name": str(record.get("original_name", "")).strip(),
         "edit_prompt": str(record.get("edit_prompt", "")).strip(),
         "source_image_url": str(record.get("source_image_url", "")).strip(),
@@ -440,6 +456,7 @@ def _upsert_image_library_record(
     prompt: str = "",
     car_model: str = "",
     color_name: str = "",
+    country: str = "",
     original_name: str = "",
     edit_prompt: str = "",
     source_image_url: str = "",
@@ -472,6 +489,7 @@ def _upsert_image_library_record(
         record["prompt"] = str(prompt or record.get("prompt") or "").strip()
         record["car_model"] = str(car_model or record.get("car_model") or "").strip()
         record["color_name"] = str(color_name or record.get("color_name") or "").strip()
+        record["country"] = str(country or record.get("country") or "").strip()
         record["original_name"] = str(original_name or record.get("original_name") or "").strip()
         record["edit_prompt"] = str(edit_prompt or record.get("edit_prompt") or "").strip()
         record["source_image_url"] = str(source_image_url or record.get("source_image_url") or "").strip()
@@ -1512,18 +1530,21 @@ def generate_video_with_kling(image_url: str, prompt: str, headlines: Optional[l
     raise RuntimeError("Kling generation timed out")
 
 
-def _save_generated_image_bytes(image_bytes: bytes, *, prefix: str = "generated") -> str:
+def _save_generated_image_bytes(image_bytes: bytes, *, prefix: str = "generated", country: str = "") -> str:
     _ensure_output_directories()
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     unique_suffix = uuid.uuid4().hex[:8]
     file_name = f"{prefix}_{stamp}_{unique_suffix}.png"
-    file_path = GENERATED_DIR / file_name
+    bucket = _normalize_image_country_bucket(country, fallback="other")
+    target_dir = GENERATED_DIR / bucket
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_path = target_dir / file_name
     img = Image.open(BytesIO(image_bytes)).convert("RGB")
     img.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/{file_name}"
+    return f"/output/generated/{bucket}/{file_name}"
 
 
-def _persist_image_for_library(image_url: str) -> str:
+def _persist_image_for_library(image_url: str, *, country: str = "") -> str:
     normalized_url = str(image_url or "").strip()
     if not normalized_url:
         raise ValueError("image_url is required")
@@ -1536,11 +1557,14 @@ def _persist_image_for_library(image_url: str) -> str:
     safe_name = f"{Path(safe_name).stem or 'saved'}.png"
 
     _ensure_output_directories()
-    file_path = PERSISTENT_GENERATED_DIR / safe_name
+    bucket = _normalize_image_country_bucket(country, fallback="other")
+    target_dir = PERSISTENT_GENERATED_DIR / bucket
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_path = target_dir / safe_name
     if not file_path.exists():
         image = Image.open(BytesIO(raw)).convert("RGB")
         image.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/{safe_name}"
+    return f"/output/generated/{bucket}/{safe_name}"
 
 
 def _gemini_generate_image_bytes(
@@ -1629,7 +1653,7 @@ def _extract_gemini_image_bytes(response: dict) -> tuple[Optional[bytes], list[d
     return None, debug_details
 
 
-def generate_image_with_openai(prompt: str) -> tuple[str, str]:
+def generate_image_with_openai(prompt: str, *, country: str = "") -> tuple[str, str]:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set")
@@ -1656,7 +1680,7 @@ def generate_image_with_openai(prompt: str) -> tuple[str, str]:
         raise RuntimeError("OpenAI image generation returned no b64_json data")
 
     image_bytes = base64.b64decode(b64_json)
-    local_url = _save_generated_image_bytes(image_bytes, prefix="generated")
+    local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country)
     return local_url, local_url
 
 
@@ -1679,6 +1703,7 @@ def edit_image_with_gemini(
     edit_prompt: str,
     reference_image_url: str = "",
     aspect_ratio: str = "",
+    country: str = "",
 ) -> str:
     # Direct Gemini image editing (Nano Banana family).
     source_image = _fetch_image_from_url(source_image_url).convert("RGB")
@@ -1699,7 +1724,7 @@ def edit_image_with_gemini(
         parts=parts,
         aspect_ratio=aspect_ratio.strip() or None,
     )
-    return _save_generated_image_bytes(image_bytes, prefix="edited")
+    return _save_generated_image_bytes(image_bytes, prefix="edited", country=country)
 
 
 def _download_remote_bytes(url: str) -> bytes:
@@ -1810,7 +1835,7 @@ def _calculate_uncrop_extents(
 
 
 def _is_cached_uncrop_current(image_url: str) -> bool:
-    if not re.search(r"/uncrop_[0-9a-f]{20}_\d+_\d+_\d+_\d+\.png$", str(image_url or "").strip()):
+    if not re.search(r"/uncrop/(?:[^/]+/)?uncrop_[0-9a-f]{20}_\d+_\d+_\d+_\d+\.png$", str(image_url or "").strip()):
         return False
     try:
         local_path = _resolve_public_file_path(image_url)
@@ -1823,7 +1848,7 @@ def _is_cached_uncrop_current(image_url: str) -> bool:
         return False
 
 
-def uncrop_image_with_clipdrop(source_image_url: str) -> str:
+def uncrop_image_with_clipdrop(source_image_url: str, *, country: str = "") -> str:
     clipdrop_key = os.getenv("CLIPDROP_API_KEY")
     if not clipdrop_key:
         raise RuntimeError("CLIPDROP_API_KEY is not set")
@@ -1835,9 +1860,12 @@ def uncrop_image_with_clipdrop(source_image_url: str) -> str:
     source_hash = hashlib.sha256(raw).hexdigest()[:20]
     _ensure_output_directories()
     file_name = f"uncrop_{source_hash}_{extend_left}_{extend_right}_{extend_up}_{extend_down}.png"
-    file_path = UNCROP_DIR / file_name
+    bucket = _normalize_image_country_bucket(country, fallback="other")
+    target_dir = UNCROP_DIR / bucket
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_path = target_dir / file_name
     if file_path.exists():
-        return f"/output/uncrop/{file_name}"
+        return f"/output/uncrop/{bucket}/{file_name}"
 
     fields = [
         ("extend_left", str(extend_left)),
@@ -1867,7 +1895,7 @@ def uncrop_image_with_clipdrop(source_image_url: str) -> str:
 
     img = Image.open(BytesIO(uncropped_raw)).convert("RGB")
     img.save(file_path, format="PNG", optimize=True)
-    return f"/output/uncrop/{file_name}"
+    return f"/output/uncrop/{bucket}/{file_name}"
 
 
 def _save_uploaded_data_url(data_url: str, original_name: str = "") -> str:
@@ -1893,9 +1921,11 @@ def _save_uploaded_data_url(data_url: str, original_name: str = "") -> str:
     stem = Path(original_name).stem if original_name else "upload"
     safe_stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_") or "upload"
     file_name = f"{safe_stem}_{stamp}.{ext}"
-    file_path = GENERATED_DIR / file_name
+    target_dir = GENERATED_DIR / "uploaded"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_path = target_dir / file_name
     image.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/{file_name}"
+    return f"/output/generated/uploaded/{file_name}"
 
 
 def _save_uploaded_file_bytes(file_bytes: bytes, original_name: str = "") -> str:
@@ -1908,9 +1938,11 @@ def _save_uploaded_file_bytes(file_bytes: bytes, original_name: str = "") -> str
     stem = Path(original_name).stem if original_name else "upload"
     safe_stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_") or "upload"
     file_name = f"{safe_stem}_{stamp}.png"
-    file_path = GENERATED_DIR / file_name
+    target_dir = GENERATED_DIR / "uploaded"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_path = target_dir / file_name
     image.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/{file_name}"
+    return f"/output/generated/uploaded/{file_name}"
 
 
 def _save_uploaded_video_bytes(file_bytes: bytes, original_name: str = "") -> str:
@@ -3244,6 +3276,7 @@ def render_banner_images(
     image_shift_x: int = 0,
     image_shift_y: int = 0,
     banner_image_overrides: Optional[dict[tuple[int, str], dict]] = None,
+    country: str = "",
 ) -> tuple[list[dict], str]:
     _ensure_output_directories()
 
@@ -3252,13 +3285,17 @@ def render_banner_images(
     if image_url:
         cached_record = get_image_library_record(image_url)
         cached_banner_source_url = ""
+        cached_country = ""
         if cached_record is not None:
             cached_banner_source_url = str(cached_record.get("banner_source_url", "")).strip()
+            cached_country = str(cached_record.get("country", "")).strip()
+        source_kind = str((cached_record or {}).get("kind") or _infer_library_kind_from_url(image_url)).strip()
+        uncrop_country = "uploaded" if source_kind == "uploaded" else (country or cached_country or "other")
         try:
             if cached_banner_source_url and _is_cached_uncrop_current(cached_banner_source_url):
                 effective_image_url = cached_banner_source_url
             else:
-                effective_image_url = uncrop_image_with_clipdrop(image_url)
+                effective_image_url = uncrop_image_with_clipdrop(image_url, country=uncrop_country)
                 update_image_library_banner_source(image_url, effective_image_url)
             source_image = _fetch_image_from_url(effective_image_url)
         except Exception:
@@ -3517,7 +3554,7 @@ class Handler(SimpleHTTPRequestHandler):
                     model_description=model_description,
                     situation_description=situation_description,
                 )
-                image_url, local_image_url = generate_image_with_openai(prompt)
+                image_url, local_image_url = generate_image_with_openai(prompt, country=country)
                 self._send_json(
                     HTTPStatus.OK,
                     {
@@ -3629,7 +3666,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not prompt:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "prompt is required"})
                     return
-                image_url, local_image_url = generate_image_with_openai(prompt)
+                image_url, local_image_url = generate_image_with_openai(prompt, country=str(body.get("country", "")).strip())
                 self._send_json(
                     HTTPStatus.OK,
                     {
@@ -3656,6 +3693,7 @@ class Handler(SimpleHTTPRequestHandler):
                     edit_prompt,
                     reference_image_url,
                     aspect_ratio=aspect_ratio,
+                    country=str(body.get("country", "")).strip(),
                 )
                 self._send_json(HTTPStatus.OK, {"image_local_url": edited_local_url})
                 return
@@ -3694,6 +3732,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
 
             image_url = str(body.get("imageUrl", "")).strip()
+            country = str(body.get("country", "")).strip()
             text_sets = body.get("textSets", [])
             if not isinstance(text_sets, list):
                 text_sets = []
@@ -3774,14 +3813,25 @@ class Handler(SimpleHTTPRequestHandler):
                 image_shift_x=image_shift_x,
                 image_shift_y=image_shift_y,
                 banner_image_overrides=banner_image_overrides,
+                country=country,
             )
             if not banners:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "No supported sizes provided"})
                 return
-            persisted_image_url = _persist_image_for_library(image_url)
+            source_record = get_image_library_record(image_url)
+            source_kind = str((source_record or {}).get("kind") or _infer_library_kind_from_url(image_url)).strip()
+            library_country = country or str((source_record or {}).get("country", "")).strip()
+            if source_kind == "uploaded":
+                library_country = "uploaded"
+            elif not library_country:
+                library_country = "other"
+            persisted_image_url = _persist_image_for_library(image_url, country=library_country)
+            banner_source_for_library = effective_image_url if _is_cached_uncrop_current(effective_image_url) else ""
             library_image = _upsert_image_library_record(
                 persisted_image_url,
-                kind=_infer_library_kind_from_name(Path(urlparse(persisted_image_url).path).name),
+                kind=_infer_library_kind_from_url(persisted_image_url),
+                banner_source_url=banner_source_for_library,
+                country=library_country,
                 original_name=Path(urlparse(persisted_image_url).path).name,
             )
             self._send_json(

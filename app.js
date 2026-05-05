@@ -324,6 +324,7 @@ function normalizeLibraryImage(item) {
     prompt: String(item.prompt || "").trim(),
     car_model: String(item.car_model || "").trim(),
     color_name: String(item.color_name || "").trim(),
+    country: String(item.country || "").trim(),
     original_name: String(item.original_name || "").trim(),
     edit_prompt: String(item.edit_prompt || "").trim(),
     source_image_url: String(item.source_image_url || "").trim(),
@@ -358,6 +359,14 @@ function findLibraryVideoByUrl(url) {
   const target = String(url || "").trim();
   if (!target) return null;
   return state.videoLibrary.find((item) => item.video_url === target) || null;
+}
+
+function getImageLibraryCountryLabel(item) {
+  const country = String(item?.country || "").trim();
+  if (country) return country;
+  const kind = String(item?.kind || "").toLowerCase();
+  if (kind === "uploaded") return "Uploaded";
+  return "Other";
 }
 
 function setSourceStatusForImage(record) {
@@ -535,42 +544,65 @@ function renderSourceLibrary() {
     return;
   }
 
+  const groups = new Map();
   state.imageLibrary.forEach((item) => {
-    const card = document.createElement("div");
-    card.className = "source-card-wrap";
+    const label = getImageLibraryCountryLabel(item);
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(item);
+  });
 
-    const previewBtn = document.createElement("button");
-    previewBtn.type = "button";
-    previewBtn.className = "source-card";
-    if (state.bannerSourceImageUrl && item.image_url === state.bannerSourceImageUrl) {
-      previewBtn.classList.add("is-active");
-    }
-    previewBtn.setAttribute("aria-label", item.car_model || item.original_name || item.label || "Saved image");
+  groups.forEach((items, label) => {
+    const group = document.createElement("section");
+    group.className = "source-library-group";
 
-    const preview = document.createElement("img");
-    preview.className = "source-card-image";
-    preview.src = item.image_url;
-    preview.alt = item.car_model || item.original_name || item.label || item.kind || "Saved image";
-    previewBtn.appendChild(preview);
-    previewBtn.addEventListener("click", () => applySelectedImage(item));
+    const title = document.createElement("h4");
+    title.className = "source-library-group-title";
+    title.textContent = label;
+    group.appendChild(title);
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "source-card-delete";
-    deleteBtn.setAttribute("aria-label", "Delete saved image");
-    const deleteGlyph = document.createElement("span");
-    deleteGlyph.className = "source-card-delete-glyph";
-    deleteGlyph.setAttribute("aria-hidden", "true");
-    deleteBtn.appendChild(deleteGlyph);
-    deleteBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      deleteLibraryImage(item.image_url);
+    const grid = document.createElement("div");
+    grid.className = "source-library-group-grid";
+
+    items.forEach((item) => {
+      const card = document.createElement("div");
+      card.className = "source-card-wrap";
+
+      const previewBtn = document.createElement("button");
+      previewBtn.type = "button";
+      previewBtn.className = "source-card";
+      if (state.bannerSourceImageUrl && item.image_url === state.bannerSourceImageUrl) {
+        previewBtn.classList.add("is-active");
+      }
+      previewBtn.setAttribute("aria-label", item.car_model || item.original_name || item.label || "Saved image");
+
+      const preview = document.createElement("img");
+      preview.className = "source-card-image";
+      preview.src = item.image_url;
+      preview.alt = item.car_model || item.original_name || item.label || item.kind || "Saved image";
+      previewBtn.appendChild(preview);
+      previewBtn.addEventListener("click", () => applySelectedImage(item));
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "source-card-delete";
+      deleteBtn.setAttribute("aria-label", "Delete saved image");
+      const deleteGlyph = document.createElement("span");
+      deleteGlyph.className = "source-card-delete-glyph";
+      deleteGlyph.setAttribute("aria-hidden", "true");
+      deleteBtn.appendChild(deleteGlyph);
+      deleteBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        deleteLibraryImage(item.image_url);
+      });
+
+      card.appendChild(previewBtn);
+      card.appendChild(deleteBtn);
+      grid.appendChild(card);
     });
 
-    card.appendChild(previewBtn);
-    card.appendChild(deleteBtn);
-    sourceLibraryEl.appendChild(card);
+    group.appendChild(grid);
+    sourceLibraryEl.appendChild(group);
   });
 }
 
@@ -1807,6 +1839,7 @@ async function generateEditedSourceImage() {
         imageUrl: state.editSourceImageUrl,
         editPrompt: EDIT_CLEANUP_PROMPT,
         aspectRatio: "3:2",
+        country: state.selectedCountry,
       }),
     });
     const payload = await response.json();
@@ -1846,6 +1879,7 @@ function buildRenderPayload() {
     .filter(Boolean);
   return {
     imageUrl: state.bannerSourceImageUrl,
+    country: state.selectedCountry,
     imageScale: (Number(state.imageScalePercent) || 100) / 100,
     imageShiftX: stepToShiftPx(Number(state.imageShiftXStep) || 0),
     // UX rule: moving Y slider right should move image up.
@@ -2184,6 +2218,7 @@ async function applyQuickImageEdit(editPrompt, referenceImageUrl = "") {
         imageUrl: state.imageUrl,
         editPrompt,
         referenceImageUrl: resolvedReferenceImageUrl,
+        country: state.selectedCountry,
       }),
     });
     const payload = await response.json();
@@ -2263,6 +2298,7 @@ promptApplyBtn.addEventListener("click", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt: state.basePromptText,
+            country: state.selectedCountry,
           }),
         });
       } else {
@@ -2273,6 +2309,7 @@ promptApplyBtn.addEventListener("click", () => {
           body: JSON.stringify({
             imageUrl: state.imageUrl,
             editPrompt,
+            country: state.selectedCountry,
           }),
         });
       }

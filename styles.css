@@ -1088,8 +1088,8 @@ body {
 
 .source-library {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 10px;
 }
 
@@ -1123,6 +1123,27 @@ body {
   width: 16px;
   height: 16px;
   display: block;
+}
+
+.source-library-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.source-library-group-title {
+  margin: 0;
+  color: rgba(14, 14, 14, 0.58);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.source-library-group-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .source-card-wrap {
