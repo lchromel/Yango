@@ -1125,22 +1125,82 @@ body {
   display: block;
 }
 
-.source-library-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.source-library-filter {
+  position: relative;
+  width: 178px;
 }
 
-.source-library-group-title {
-  margin: 0;
-  color: rgba(14, 14, 14, 0.58);
-  font-size: 9px;
-  font-weight: 700;
+.source-library-filter-toggle {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid #0e0e0e;
+  border-radius: 999px;
+  background: transparent;
+  color: #0e0e0e;
+  font-family: "Yango Group Text", "Arial", sans-serif;
+  font-size: 10px;
+  font-weight: 800;
   line-height: 1;
+  text-align: left;
   text-transform: uppercase;
+  padding: 8px 28px 8px 12px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.source-library-group-grid {
+.source-library-filter-toggle::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid #0e0e0e;
+  border-bottom: 2px solid #0e0e0e;
+  transform: translateY(-65%) rotate(45deg);
+}
+
+.source-library-filter-toggle[aria-expanded="true"]::after {
+  transform: translateY(-35%) rotate(225deg);
+}
+
+.source-library-filter-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  max-height: 156px;
+  overflow-y: auto;
+  border: 1px solid #0e0e0e;
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 6px;
+}
+
+.source-library-filter-option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #0e0e0e;
+  font-family: "Yango Group Text", "Arial", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  padding: 7px 6px;
+  cursor: pointer;
+}
+
+.source-library-filter-option:hover,
+.source-library-filter-option:focus-visible,
+.source-library-filter-option.is-active {
+  font-weight: 800;
+}
+
+.source-library-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

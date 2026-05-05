@@ -115,6 +115,8 @@ const state = {
   editSourceStatus: "none",
   imageHistory: [],
   imageLibrary: [],
+  sourceLibraryCountry: "",
+  sourceLibraryCountryMenuOpen: false,
   imageUrl: "",
   bannerSourceImageUrl: "",
   videoPromptText: "",
@@ -369,6 +371,25 @@ function getImageLibraryCountryLabel(item) {
   return "Other";
 }
 
+function getImageLibraryCountryOptions() {
+  const seen = new Set();
+  state.imageLibrary.forEach((item) => {
+    const label = getImageLibraryCountryLabel(item);
+    if (label) seen.add(label);
+  });
+  return Array.from(seen);
+}
+
+function getActiveSourceLibraryCountry(options = getImageLibraryCountryOptions()) {
+  if (!options.length) return "";
+  const selected = String(state.sourceLibraryCountry || "").trim();
+  if (selected && options.includes(selected)) return selected;
+  if (state.selectedCountry && options.includes(state.selectedCountry)) return state.selectedCountry;
+  if (options.includes("Uploaded")) return "Uploaded";
+  if (options.includes("Other")) return "Other";
+  return options[0] || "";
+}
+
 function setSourceStatusForImage(record) {
   const kind = String(record?.kind || "").toLowerCase();
   if (kind === "uploaded") {
@@ -440,6 +461,7 @@ function applySelectedImage(record, options = {}) {
   invalidateRenderedBanners();
   if (closeLibrary) {
     state.sourceLibraryOpen = false;
+    state.sourceLibraryCountryMenuOpen = false;
   }
   setSourceStatusForImage(image);
   renderBannerSetsView();
@@ -461,6 +483,7 @@ async function deleteLibraryImage(imageUrl) {
       throw new Error(payload.error || "Delete failed");
     }
     state.imageLibrary = state.imageLibrary.filter((item) => item.image_url !== targetUrl);
+    state.sourceLibraryCountryMenuOpen = false;
     if (state.bannerSourceImageUrl === targetUrl) {
       state.bannerSourceImageUrl = "";
       invalidateRenderedBanners();
@@ -544,66 +567,99 @@ function renderSourceLibrary() {
     return;
   }
 
-  const groups = new Map();
-  state.imageLibrary.forEach((item) => {
-    const label = getImageLibraryCountryLabel(item);
-    if (!groups.has(label)) groups.set(label, []);
-    groups.get(label).push(item);
+  const options = getImageLibraryCountryOptions();
+  const activeCountry = getActiveSourceLibraryCountry(options);
+  state.sourceLibraryCountry = activeCountry;
+  if (!options.includes(activeCountry)) {
+    state.sourceLibraryCountryMenuOpen = false;
+  }
+
+  const selector = document.createElement("div");
+  selector.className = "source-library-filter";
+
+  const selectorToggle = document.createElement("button");
+  selectorToggle.type = "button";
+  selectorToggle.className = "source-library-filter-toggle";
+  selectorToggle.setAttribute("aria-expanded", state.sourceLibraryCountryMenuOpen ? "true" : "false");
+  selectorToggle.textContent = activeCountry || "Choose country";
+  selectorToggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    state.sourceLibraryCountryMenuOpen = !state.sourceLibraryCountryMenuOpen;
+    renderSourceLibrary();
   });
+  selector.appendChild(selectorToggle);
 
-  groups.forEach((items, label) => {
-    const group = document.createElement("section");
-    group.className = "source-library-group";
+  const selectorMenu = document.createElement("div");
+  selectorMenu.className = "source-library-filter-menu";
+  selectorMenu.classList.toggle("hidden", !state.sourceLibraryCountryMenuOpen);
+  options.forEach((label) => {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "source-library-filter-option";
+    if (label === activeCountry) option.classList.add("is-active");
+    option.textContent = label;
+    option.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      state.sourceLibraryCountry = label;
+      state.sourceLibraryCountryMenuOpen = false;
+      renderSourceLibrary();
+    });
+    selectorMenu.appendChild(option);
+  });
+  selector.appendChild(selectorMenu);
+  sourceLibraryEl.appendChild(selector);
 
-    const title = document.createElement("h4");
-    title.className = "source-library-group-title";
-    title.textContent = label;
-    group.appendChild(title);
+  const visibleItems = state.imageLibrary.filter((item) => getImageLibraryCountryLabel(item) === activeCountry);
+  if (!visibleItems.length) {
+    const empty = document.createElement("p");
+    empty.className = "source-library-empty";
+    empty.textContent = `No saved images for ${activeCountry}.`;
+    sourceLibraryEl.appendChild(empty);
+    return;
+  }
 
-    const grid = document.createElement("div");
-    grid.className = "source-library-group-grid";
+  const grid = document.createElement("div");
+  grid.className = "source-library-grid";
+  visibleItems.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "source-card-wrap";
 
-    items.forEach((item) => {
-      const card = document.createElement("div");
-      card.className = "source-card-wrap";
+    const previewBtn = document.createElement("button");
+    previewBtn.type = "button";
+    previewBtn.className = "source-card";
+    if (state.bannerSourceImageUrl && item.image_url === state.bannerSourceImageUrl) {
+      previewBtn.classList.add("is-active");
+    }
+    previewBtn.setAttribute("aria-label", item.car_model || item.original_name || item.label || "Saved image");
 
-      const previewBtn = document.createElement("button");
-      previewBtn.type = "button";
-      previewBtn.className = "source-card";
-      if (state.bannerSourceImageUrl && item.image_url === state.bannerSourceImageUrl) {
-        previewBtn.classList.add("is-active");
-      }
-      previewBtn.setAttribute("aria-label", item.car_model || item.original_name || item.label || "Saved image");
+    const preview = document.createElement("img");
+    preview.className = "source-card-image";
+    preview.src = item.image_url;
+    preview.alt = item.car_model || item.original_name || item.label || item.kind || "Saved image";
+    previewBtn.appendChild(preview);
+    previewBtn.addEventListener("click", () => applySelectedImage(item));
 
-      const preview = document.createElement("img");
-      preview.className = "source-card-image";
-      preview.src = item.image_url;
-      preview.alt = item.car_model || item.original_name || item.label || item.kind || "Saved image";
-      previewBtn.appendChild(preview);
-      previewBtn.addEventListener("click", () => applySelectedImage(item));
-
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "source-card-delete";
-      deleteBtn.setAttribute("aria-label", "Delete saved image");
-      const deleteGlyph = document.createElement("span");
-      deleteGlyph.className = "source-card-delete-glyph";
-      deleteGlyph.setAttribute("aria-hidden", "true");
-      deleteBtn.appendChild(deleteGlyph);
-      deleteBtn.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        deleteLibraryImage(item.image_url);
-      });
-
-      card.appendChild(previewBtn);
-      card.appendChild(deleteBtn);
-      grid.appendChild(card);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "source-card-delete";
+    deleteBtn.setAttribute("aria-label", "Delete saved image");
+    const deleteGlyph = document.createElement("span");
+    deleteGlyph.className = "source-card-delete-glyph";
+    deleteGlyph.setAttribute("aria-hidden", "true");
+    deleteBtn.appendChild(deleteGlyph);
+    deleteBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteLibraryImage(item.image_url);
     });
 
-    group.appendChild(grid);
-    sourceLibraryEl.appendChild(group);
+    card.appendChild(previewBtn);
+    card.appendChild(deleteBtn);
+    grid.appendChild(card);
   });
+  sourceLibraryEl.appendChild(grid);
 }
 
 function renderVideoLibrary() {
@@ -829,6 +885,8 @@ function renderCountryControl() {
       state.selectedCountry === country.country,
       () => {
         state.selectedCountry = country.country;
+        state.sourceLibraryCountry = country.country;
+        state.sourceLibraryCountryMenuOpen = false;
         state.selectedTransportLabel = "";
         state.selectedComposition = "";
         state.countryMenuOpen = false;
@@ -2167,11 +2225,13 @@ document.addEventListener("click", (event) => {
   ) {
     return;
   }
-  if (state.countryMenuOpen || state.transportMenuOpen || state.styleMenuOpen) {
+  if (state.countryMenuOpen || state.transportMenuOpen || state.styleMenuOpen || state.sourceLibraryCountryMenuOpen) {
     state.countryMenuOpen = false;
     state.transportMenuOpen = false;
     state.styleMenuOpen = false;
+    state.sourceLibraryCountryMenuOpen = false;
     renderImageControls();
+    renderSourceLibrary();
   }
 });
 
@@ -2573,6 +2633,9 @@ if (sourceLibraryToggleEl) {
   sourceLibraryToggleEl.addEventListener("click", () => {
     if (!state.imageLibrary.length) return;
     state.sourceLibraryOpen = !state.sourceLibraryOpen;
+    if (!state.sourceLibraryOpen) {
+      state.sourceLibraryCountryMenuOpen = false;
+    }
     renderUiState();
   });
 }
