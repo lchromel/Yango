@@ -1133,7 +1133,6 @@ body {
 }
 
 .source-library-filter-toggle {
-  position: relative;
   width: auto;
   max-width: 100%;
   min-height: 18px;
@@ -1146,27 +1145,25 @@ body {
   line-height: 1;
   text-align: left;
   text-transform: uppercase;
-  padding: 0 14px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
   cursor: pointer;
+  overflow: hidden;
+}
+
+.source-library-filter-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.source-library-filter-toggle::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  border-right: 2px solid #0e0e0e;
-  border-bottom: 2px solid #0e0e0e;
-  transform: translateY(-65%) rotate(45deg);
-}
-
-.source-library-filter-toggle[aria-expanded="true"]::after {
-  transform: translateY(-35%) rotate(225deg);
+.source-library-filter-chevron {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  display: block;
 }
 
 .source-library-filter-menu {

@@ -581,7 +581,18 @@ function renderSourceLibrary() {
   selectorToggle.type = "button";
   selectorToggle.className = "source-library-filter-toggle";
   selectorToggle.setAttribute("aria-expanded", state.sourceLibraryCountryMenuOpen ? "true" : "false");
-  selectorToggle.textContent = activeCountry || "Choose country";
+  const selectorLabel = document.createElement("span");
+  selectorLabel.className = "source-library-filter-label";
+  selectorLabel.textContent = activeCountry || "Choose country";
+  selectorToggle.appendChild(selectorLabel);
+  const selectorChevron = document.createElement("img");
+  selectorChevron.className = "source-library-filter-chevron";
+  selectorChevron.src = state.sourceLibraryCountryMenuOpen
+    ? "./assets/icons/ChevronUpM.svg"
+    : "./assets/icons/ChevronDownM.svg";
+  selectorChevron.alt = "";
+  selectorChevron.setAttribute("aria-hidden", "true");
+  selectorToggle.appendChild(selectorChevron);
   selectorToggle.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
