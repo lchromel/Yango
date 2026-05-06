@@ -345,6 +345,14 @@
           "orders": 27473
         },
         {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 0
+        },
+        {
           "label": "Tuktuk",
           "basicClass": "Tuktuk",
           "tariffCode": "tuktuk",
