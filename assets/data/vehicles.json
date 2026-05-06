@@ -864,7 +864,7 @@
           "label": "Moto",
           "basicClass": "Moto",
           "tariffCode": "moto",
-          "model": "",
+          "model": "Moto",
           "vehicleType": "moto",
           "orders": 5577
         }
