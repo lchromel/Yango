@@ -1100,17 +1100,17 @@ body {
 }
 
 .source-library-toggle {
-  border: 1px solid #0e0e0e;
-  border-radius: 999px;
+  border: 0;
   background: transparent;
   color: #0e0e0e;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
   text-transform: uppercase;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px 6px 10px;
+  gap: 6px;
+  min-height: 18px;
+  padding: 0;
   cursor: pointer;
 }
 
@@ -1127,23 +1127,26 @@ body {
 
 .source-library-filter {
   position: relative;
-  width: 100%;
-  max-width: 178px;
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
 }
 
 .source-library-filter-toggle {
-  width: 100%;
+  position: relative;
+  width: auto;
+  max-width: 100%;
   min-height: 18px;
   border: 0;
   background: transparent;
   color: #0e0e0e;
   font-family: "Yango Group Text", "Arial", sans-serif;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1;
   text-align: left;
   text-transform: uppercase;
-  padding: 0 22px 0 0;
+  padding: 0 14px 0 0;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1153,10 +1156,10 @@ body {
 .source-library-filter-toggle::after {
   content: "";
   position: absolute;
-  right: 2px;
+  right: 0;
   top: 50%;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-right: 2px solid #0e0e0e;
   border-bottom: 2px solid #0e0e0e;
   transform: translateY(-65%) rotate(45deg);
@@ -1171,7 +1174,9 @@ body {
   z-index: 5;
   top: calc(100% + 4px);
   left: 0;
-  width: 100%;
+  min-width: 128px;
+  width: max-content;
+  max-width: 220px;
   max-height: 156px;
   overflow-y: auto;
   border: 1px solid #0e0e0e;
