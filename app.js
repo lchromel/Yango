@@ -205,7 +205,7 @@ function humanizeError(error, fallback = "Something went wrong. Please try again
   }
 
   if (normalized.includes("clipdrop uncrop failed")) {
-    return "The image expansion step failed. Please try again, or use another source image if this keeps happening.";
+    return "The image expansion step failed, so the banners were rendered with the original image. Please try again, or use another source image if this keeps happening.";
   }
 
   if (normalized === "render failed" || normalized.includes("banner generation failed")) {
@@ -2107,6 +2107,9 @@ async function createBanners() {
     state.renderedBanners = (payload.banners || []).filter((item) => item && item.url && item.size);
     state.hasRenderedBanners = state.renderedBanners.length > 0;
     upsertStateLibraryImage(payload.library_image);
+    if (payload.uncrop_warning) {
+      showError(payload.uncrop_warning, "The image expansion step failed, so the banners were rendered with the original image.");
+    }
   } catch (error) {
     showError(error, "Something went wrong. Please try again.");
   } finally {
