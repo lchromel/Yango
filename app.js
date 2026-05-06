@@ -357,6 +357,18 @@ function findLibraryImageByUrl(url) {
   return state.imageLibrary.find((item) => item.image_url === target) || null;
 }
 
+function upsertStateLibraryImage(record) {
+  const image = normalizeLibraryImage(record);
+  if (!image) return null;
+  const index = state.imageLibrary.findIndex((item) => item.image_url === image.image_url);
+  if (index >= 0) {
+    state.imageLibrary[index] = image;
+  } else {
+    state.imageLibrary.unshift(image);
+  }
+  return image;
+}
+
 function findLibraryVideoByUrl(url) {
   const target = String(url || "").trim();
   if (!target) return null;
@@ -1932,6 +1944,7 @@ async function generateEditedSourceImage() {
 }
 
 function buildRenderPayload() {
+  const selectedLibraryImage = findLibraryImageByUrl(state.bannerSourceImageUrl);
   const bannerImageOverrides = Object.entries(state.bannerImageOverrides || {})
     .map(([key, values]) => {
       const parsed = parseBannerPositionKey(key);
@@ -1948,6 +1961,7 @@ function buildRenderPayload() {
     .filter(Boolean);
   return {
     imageUrl: state.bannerSourceImageUrl,
+    bannerSourceUrl: selectedLibraryImage?.banner_source_url || "",
     country: state.selectedCountry,
     imageScale: (Number(state.imageScalePercent) || 100) / 100,
     imageShiftX: stepToShiftPx(Number(state.imageShiftXStep) || 0),
@@ -2027,6 +2041,7 @@ async function createBanners() {
     if (!response.ok) throw new Error(payload.error || "Render failed");
     state.renderedBanners = (payload.banners || []).filter((item) => item && item.url && item.size);
     state.hasRenderedBanners = state.renderedBanners.length > 0;
+    upsertStateLibraryImage(payload.library_image);
   } catch (error) {
     alert(`ERROR: ${error.message || "UNKNOWN ERROR"}`);
   } finally {

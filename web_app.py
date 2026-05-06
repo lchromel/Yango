@@ -3277,6 +3277,7 @@ def render_banner_images(
     image_shift_y: int = 0,
     banner_image_overrides: Optional[dict[tuple[int, str], dict]] = None,
     country: str = "",
+    banner_source_url: str = "",
 ) -> tuple[list[dict], str]:
     _ensure_output_directories()
 
@@ -3284,10 +3285,10 @@ def render_banner_images(
     effective_image_url = str(image_url or "").strip()
     if image_url:
         cached_record = get_image_library_record(image_url)
-        cached_banner_source_url = ""
+        cached_banner_source_url = str(banner_source_url or "").strip()
         cached_country = ""
         if cached_record is not None:
-            cached_banner_source_url = str(cached_record.get("banner_source_url", "")).strip()
+            cached_banner_source_url = cached_banner_source_url or str(cached_record.get("banner_source_url", "")).strip()
             cached_country = str(cached_record.get("country", "")).strip()
         source_kind = str((cached_record or {}).get("kind") or _infer_library_kind_from_url(image_url)).strip()
         uncrop_country = "uploaded" if source_kind == "uploaded" else (country or cached_country or "other")
@@ -3732,6 +3733,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
 
             image_url = str(body.get("imageUrl", "")).strip()
+            banner_source_url = str(body.get("bannerSourceUrl", "")).strip()
             country = str(body.get("country", "")).strip()
             text_sets = body.get("textSets", [])
             if not isinstance(text_sets, list):
@@ -3814,6 +3816,7 @@ class Handler(SimpleHTTPRequestHandler):
                 image_shift_y=image_shift_y,
                 banner_image_overrides=banner_image_overrides,
                 country=country,
+                banner_source_url=banner_source_url,
             )
             if not banners:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "No supported sizes provided"})
