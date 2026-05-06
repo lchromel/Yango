@@ -179,6 +179,71 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = IMAGE_REQUEST_TIM
   }
 }
 
+function humanizeError(error, fallback = "Something went wrong. Please try again.") {
+  const rawMessage =
+    typeof error === "string"
+      ? error
+      : String(error?.message || error?.error || fallback || "").trim();
+  const normalized = rawMessage.toLowerCase();
+
+  if (normalized.includes("moderation_blocked") || normalized.includes("rejected by the safety system")) {
+    return [
+      "The request was blocked by the image safety system.",
+      "Try rephrasing the description in a more neutral way and avoid subjective descriptions of people, sensitive traits, or risky situations.",
+    ].join("\n\n");
+  }
+
+  if (normalized.includes("failed to fetch")) {
+    return [
+      "The app could not reach the server.",
+      "Please check the connection and try again. If it keeps happening, the server may be restarting or the request may have timed out.",
+    ].join("\n\n");
+  }
+
+  if (normalized.includes("request timed out") || normalized.includes("timed out")) {
+    return "The request took too long and timed out. Image generation can take several minutes, so please try again.";
+  }
+
+  if (normalized.includes("clipdrop uncrop failed")) {
+    return "The image expansion step failed. Please try again, or use another source image if this keeps happening.";
+  }
+
+  if (normalized === "render failed" || normalized.includes("banner generation failed")) {
+    return fallback || "Banner generation failed. Please try again.";
+  }
+
+  if (normalized === "edit failed") {
+    return fallback || "Image editing failed. Please try again.";
+  }
+
+  if (normalized === "upload failed") {
+    return fallback || "Upload failed. Please try another file.";
+  }
+
+  if (normalized === "generation failed") {
+    return fallback || "Image generation failed. Please try again.";
+  }
+
+  if (normalized.includes("openai_image") || normalized.includes("openai") || normalized.includes("image generation")) {
+    return "Image generation failed. Please try simplifying the prompt or generating again.";
+  }
+
+  if (normalized.includes("imageurl is required")) {
+    return "Please generate or upload an image first.";
+  }
+
+  if (normalized.includes("sizes must be an array") || normalized.includes("no supported sizes")) {
+    return "Banner sizes were not prepared correctly. Please refresh the page and try again.";
+  }
+
+  return rawMessage || fallback;
+}
+
+function showError(error, fallback) {
+  console.error(error);
+  alert(humanizeError(error, fallback));
+}
+
 const SOURCE_STATUS = {
   none: "STATUS",
   uploading: "UPLOADING",
@@ -504,7 +569,7 @@ async function deleteLibraryImage(imageUrl) {
     }
     renderUiState();
   } catch (error) {
-    alert(`ERROR: ${error.message || "DELETE FAILED"}`);
+    showError(error, "Could not delete this item.");
   }
 }
 
@@ -553,7 +618,7 @@ async function deleteLibraryVideo(videoUrl) {
     }
     renderUiState();
   } catch (error) {
-    alert(`ERROR: ${error.message || "DELETE FAILED"}`);
+    showError(error, "Could not delete this item.");
   }
 }
 
@@ -1783,7 +1848,7 @@ async function downloadAllBanners() {
     topActionBtn.disabled = true;
     await createZipAndDownload(urls, "banners_all.zip");
   } catch (error) {
-    alert(`ERROR: ${error.message || "DOWNLOAD FAILED"}`);
+    showError(error, "Could not download the banners.");
   } finally {
     renderTopAction();
   }
@@ -1884,7 +1949,7 @@ async function generatePrompt() {
     }
     setSourceStatus("generated");
   } catch (error) {
-    alert(`ERROR: ${error.message || "UNKNOWN ERROR"}`);
+    showError(error, "Something went wrong. Please try again.");
     setSourceStatus("failed");
   } finally {
     state.generating = false;
@@ -1934,7 +1999,7 @@ async function generateEditedSourceImage() {
     state.bannerSourceImageUrl = editedUrl;
     setSourceStatus("generated");
   } catch (error) {
-    alert(`ERROR: ${error.message || "EDIT FAILED"}`);
+    showError(error, "Image editing failed. Please try again.");
     setSourceStatus("failed");
   } finally {
     state.generating = false;
@@ -2043,7 +2108,7 @@ async function createBanners() {
     state.hasRenderedBanners = state.renderedBanners.length > 0;
     upsertStateLibraryImage(payload.library_image);
   } catch (error) {
-    alert(`ERROR: ${error.message || "UNKNOWN ERROR"}`);
+    showError(error, "Something went wrong. Please try again.");
   } finally {
     state.bannerRendering = false;
     state.bannerStage = "idle";
@@ -2086,7 +2151,7 @@ async function generateVideoPrompt() {
       throw new Error("Empty video prompt returned");
     }
   } catch (error) {
-    alert(`ERROR: ${error.message || "VIDEO PROMPT FAILED"}`);
+    showError(error, "Video prompt generation failed. Please try again.");
   } finally {
     state.videoGenerating = false;
     renderUiState();
@@ -2130,7 +2195,7 @@ async function generateVideoFromPrompt() {
       }
     } catch (error) {
       state.videoRenderStatus = "Video generation failed.";
-      alert(`ERROR: ${error.message || "VIDEO GENERATION FAILED"}`);
+      showError(error, "Video generation failed. Please try again.");
     } finally {
       state.videoRendering = false;
       renderUiState();
@@ -2182,7 +2247,7 @@ async function generateVideoFromPrompt() {
     }
   } catch (error) {
     state.videoRenderStatus = "Video generation failed.";
-    alert(`ERROR: ${error.message || "VIDEO GENERATION FAILED"}`);
+    showError(error, "Video generation failed. Please try again.");
   } finally {
     state.videoRendering = false;
     renderUiState();
@@ -2324,7 +2389,7 @@ async function applyQuickImageEdit(editPrompt, referenceImageUrl = "") {
     setSourceStatus("generated");
     renderBannerSetsView();
   } catch (error) {
-    alert(`ERROR: ${error.message || "EDIT FAILED"}`);
+    showError(error, "Image editing failed. Please try again.");
   } finally {
     state.generating = false;
     renderUiState();
@@ -2416,7 +2481,7 @@ promptApplyBtn.addEventListener("click", () => {
       setSourceStatus("generated");
       renderBannerSetsView();
     } catch (error) {
-      alert(`ERROR: ${error.message || "EDIT FAILED"}`);
+      showError(error, "Image editing failed. Please try again.");
     } finally {
       state.generating = false;
       promptApplyBtn.disabled = false;
@@ -2497,7 +2562,7 @@ uploadImageInputEl.addEventListener("change", async (event) => {
     renderUiState();
   } catch (error) {
     setSourceStatus("failed");
-    alert(`ERROR: ${error.message || "UPLOAD FAILED"}`);
+    showError(error, "Upload failed. Please try another file.");
   } finally {
     uploadImageInputEl.value = "";
   }
@@ -2528,7 +2593,7 @@ if (editUploadImageBtnEl && editUploadImageInputEl) {
       renderUiState();
     } catch (error) {
       state.editSourceStatus = "failed";
-      alert(`ERROR: ${error.message || "UPLOAD FAILED"}`);
+      showError(error, "Upload failed. Please try another file.");
       renderUiState();
     } finally {
       editUploadImageInputEl.value = "";
@@ -2579,7 +2644,7 @@ if (uploadVideoBtnEl && uploadVideoInputEl) {
       if (videoSourceStatusEl) {
         videoSourceStatusEl.textContent = SOURCE_STATUS.failed;
       }
-      alert(`ERROR: ${error.message || "UPLOAD FAILED"}`);
+      showError(error, "Upload failed. Please try another file.");
     } finally {
       uploadVideoInputEl.value = "";
     }
