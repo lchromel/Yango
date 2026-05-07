@@ -2179,6 +2179,7 @@ def _draw_price_badge(
         )
         item_box = measure_draw.textbbox((0, 0), item["text"], font=item_font)
         item["font"] = item_font
+        item["bbox"] = item_box
         item["w"] = max(1, item_box[2] - item_box[0])
         item["h"] = max(1, item_box[3] - item_box[1])
 
@@ -2196,6 +2197,7 @@ def _draw_price_badge(
                     next_font = _load_font(headline_font_path, font_size - 1)
                     box = measure_draw.textbbox((0, 0), item["text"], font=next_font)
                     item["font"] = next_font
+                    item["bbox"] = box
                     item["w"] = max(1, box[2] - box[0])
                     item["h"] = max(1, box[3] - box[1])
                     changed = True
@@ -2209,6 +2211,8 @@ def _draw_price_badge(
         scales.append(float(cur_size) / float(base_size))
     content_scale = max(0.62, min(1.0, min(scales) if scales else 1.0))
     padding = max(6, int(round(base_padding * content_scale)))
+    if float(font_scale or 1.0) < 1.0:
+        padding = max(padding, int(round(base_padding * 0.82)))
     gap = 0 if len(lines) <= 1 else max(4, int(round(base_gap * content_scale)))
     content_w = max(int(item["w"]) for item in lines)
     content_h = sum(int(item["h"]) for item in lines) + (gap if len(lines) > 1 else 0)
@@ -2249,6 +2253,7 @@ def _draw_price_badge(
             {
                 "text": item["text"],
                 "font": hi_font,
+                "bbox": hi_box,
                 "w": max(1, hi_box[2] - hi_box[0]),
                 "h": max(1, hi_box[3] - hi_box[1]),
             }
@@ -2257,8 +2262,9 @@ def _draw_price_badge(
     stack_h_hi = sum(int(item["h"]) for item in lines_hi) + (gap_hi if len(lines_hi) > 1 else 0)
     cursor_y_hi = max(0, (badge_h_hi - stack_h_hi) // 2)
     for idx, item in enumerate(lines_hi):
+        bbox = item.get("bbox", (0, 0, int(item["w"]), int(item["h"])))
         text_x_hi = max(0, (badge_w_hi - int(item["w"])) // 2)
-        badge_draw_hi.text((text_x_hi, cursor_y_hi), item["text"], fill="#000000", font=item["font"])
+        badge_draw_hi.text((text_x_hi - int(bbox[0]), cursor_y_hi - int(bbox[1])), item["text"], fill="#000000", font=item["font"])
         cursor_y_hi += int(item["h"])
         if idx < len(lines_hi) - 1:
             cursor_y_hi += gap_hi

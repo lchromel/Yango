@@ -578,16 +578,27 @@ body {
 }
 
 .banner-language-select {
-  min-width: 112px;
-  height: 28px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #ffffff;
+  width: 112px;
+  height: 22px;
+  border: 0;
+  border-bottom: 1px solid rgba(14, 14, 14, 0.55);
+  border-radius: 0;
+  outline: none;
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, #0e0e0e 50%) right 5px center / 5px 5px no-repeat,
+    linear-gradient(135deg, #0e0e0e 50%, transparent 50%) right 0 center / 5px 5px no-repeat;
   color: #0e0e0e;
   font-family: "Yango Group Text", "Arial", sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  padding: 0 8px;
+  line-height: 1;
+  padding: 0 16px 2px 0;
+  cursor: pointer;
+}
+
+.banner-language-select:focus-visible {
+  border-bottom-color: #0e0e0e;
 }
 
 .text-set-field + .text-set-field {
