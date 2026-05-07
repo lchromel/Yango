@@ -2053,6 +2053,36 @@ def _load_font(path: Path, size: int) -> Union[ImageFont.FreeTypeFont, ImageFont
         return ImageFont.load_default()
 
 
+def _scaled_font_size(size: int, scale: float = 1.0) -> int:
+    return max(8, int(round(float(size) * float(scale or 1.0))))
+
+
+def _resolve_banner_typography(language: str) -> dict:
+    fonts_dir = ROOT / "assets" / "fonts"
+    normalized = str(language or "general").strip().lower()
+    default = {
+        "headline_font_path": fonts_dir / "YangoGroupHeadline-Heavy.ttf",
+        "text_bold_font_path": fonts_dir / "YangoGroupText-Bold.ttf",
+        "text_regular_font_path": fonts_dir / "YangoGroupText-Regular.ttf",
+        "font_scale": 1.0,
+    }
+    if normalized == "ethiopia":
+        return {
+            "headline_font_path": fonts_dir / "NotoSansEthiopic-ExtraCondensedExtraBold.ttf",
+            "text_bold_font_path": fonts_dir / "NotoSansEthiopic-Bold.ttf",
+            "text_regular_font_path": fonts_dir / "NotoSansEthiopic-Bold.ttf",
+            "font_scale": 0.9,
+        }
+    if normalized == "nepal":
+        return {
+            "headline_font_path": fonts_dir / "NotoSansDevanagariUI-ExtraCondensedExtraBold.ttf",
+            "text_bold_font_path": fonts_dir / "NotoSansDevanagari-Bold.ttf",
+            "text_regular_font_path": fonts_dir / "NotoSansDevanagari-Bold.ttf",
+            "font_scale": 0.9,
+        }
+    return default
+
+
 def _fit_font(
     draw: ImageDraw.ImageDraw,
     text: str,
@@ -2099,6 +2129,7 @@ def _draw_price_badge(
     bottom_text: str,
     text_align: str,
     headline_font_path: Path,
+    font_scale: float = 1.0,
     badge_fill_hex: str = "#E3FF74",
     shift_right_px: int = 0,
     shift_up_px: int = 0,
@@ -2120,8 +2151,8 @@ def _draw_price_badge(
     base_padding = max(1, int(round(spec["padding"] * size_scale)))
     base_gap = max(1, int(round(spec["gap"] * size_scale)))
     base_radius = max(2, int(round(spec["radius"] * size_scale)))
-    top_font_size = max(8, int(round(spec["top_font_size"] * size_scale)))
-    bottom_font_size = max(8, int(round(spec["bottom_font_size"] * size_scale)))
+    top_font_size = _scaled_font_size(int(round(spec["top_font_size"] * size_scale)), font_scale)
+    bottom_font_size = _scaled_font_size(int(round(spec["bottom_font_size"] * size_scale)), font_scale)
 
     lines: list[dict] = []
     if top_value:
@@ -2788,6 +2819,7 @@ def _render_master_banner_by_size(
     image_scale: float = 1.0,
     image_shift_x: int = 0,
     image_shift_y: int = 0,
+    banner_language: str = "general",
 ) -> Image.Image:
     width, height = BANNER_SIZE_MAP[size_key]
     canvas = Image.new("RGBA", (width, height), "#d9d9d9")
@@ -2797,10 +2829,12 @@ def _render_master_banner_by_size(
     main_text_fill = "#000000" if variant == "black" else "white"
     disclaimer_rgb = (0, 0, 0) if variant == "black" else (255, 255, 255)
 
-    headline_font_path = ROOT / "assets" / "fonts" / "YangoGroupHeadline-Heavy.ttf"
+    typography = _resolve_banner_typography(banner_language)
+    headline_font_path = typography["headline_font_path"]
     headline_italic_font_path = ROOT / "assets" / "fonts" / "YangoGroupHeadline-HeavyItalic.ttf"
-    text_bold_font_path = ROOT / "assets" / "fonts" / "YangoGroupText-Bold.ttf"
-    text_regular_font_path = ROOT / "assets" / "fonts" / "YangoGroupText-Regular.ttf"
+    text_bold_font_path = typography["text_bold_font_path"]
+    text_regular_font_path = typography["text_regular_font_path"]
+    banner_font_scale = float(typography.get("font_scale", 1.0) or 1.0)
 
     default_title_text = "Drive today\ncash in fast"
     default_subtitle_text = "Join Yango, earn quickly, and drive your future"
@@ -2834,9 +2868,9 @@ def _render_master_banner_by_size(
             _draw_vertical_black_gradient(canvas, y=int(round(721.414)), height=int(round(478.586)), opacity=0.75)
 
         logo_font = _load_font(headline_italic_font_path, 113)
-        title_font = _load_font(headline_font_path, 132)
-        subtitle_font = _load_font(text_bold_font_path, 52)
-        disclaimer_font = _load_font(text_regular_font_path, 16)
+        title_font = _load_font(headline_font_path, _scaled_font_size(132, banner_font_scale))
+        subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(52, banner_font_scale))
+        disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(16, banner_font_scale))
         if badge_enabled:
             title_wrap = 1033
             subtitle_wrap = 1033 if align_mode in {"center", "right"} else 1040
@@ -2897,6 +2931,7 @@ def _render_master_banner_by_size(
                 bottom_text=badge_bottom_text,
                 text_align=align_mode,
                 headline_font_path=headline_font_path,
+                font_scale=banner_font_scale,
                 badge_fill_hex=accent_hex,
                 shift_right_px=max(0, int(badge_shift_x or 0)),
                 shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -2973,9 +3008,9 @@ def _render_master_banner_by_size(
             _draw_vertical_black_gradient(canvas, y=int(round(height * 0.6012)), height=598, opacity=0.75)
 
         logo_font = _load_font(headline_italic_font_path, 109)
-        title_font = _load_font(headline_font_path, 132)
-        subtitle_font = _load_font(text_bold_font_path, 52)
-        disclaimer_font = _load_font(text_regular_font_path, 16)
+        title_font = _load_font(headline_font_path, _scaled_font_size(132, banner_font_scale))
+        subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(52, banner_font_scale))
+        disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(16, banner_font_scale))
         if badge_enabled:
             title_wrap = 1033
             subtitle_wrap = 1033 if align_mode in {"center", "right"} else 1040
@@ -3036,6 +3071,7 @@ def _render_master_banner_by_size(
                 bottom_text=badge_bottom_text,
                 text_align=align_mode,
                 headline_font_path=headline_font_path,
+                font_scale=banner_font_scale,
                 badge_fill_hex=accent_hex,
                 shift_right_px=max(0, int(badge_shift_x or 0)),
                 shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -3119,15 +3155,16 @@ def _render_master_banner_by_size(
                 bottom_text=badge_bottom_text,
                 text_align=align_mode,
                 headline_font_path=headline_font_path,
+                font_scale=banner_font_scale,
                 badge_fill_hex=accent_hex,
                 shift_right_px=max(0, int(badge_shift_x or 0)),
                 shift_up_px=max(0, int(badge_shift_y or 0)),
             )
 
         logo_font = _load_font(headline_italic_font_path, 74)
-        title_font = _load_font(headline_font_path, 112)
-        subtitle_font = _load_font(text_bold_font_path, 40)
-        disclaimer_font = _load_font(text_regular_font_path, 13)
+        title_font = _load_font(headline_font_path, _scaled_font_size(112, banner_font_scale))
+        subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(40, banner_font_scale))
+        disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(13, banner_font_scale))
 
         top_x = 532 if align_mode == "right" else 32
         top_align = "right" if align_mode == "right" else ("center" if align_mode == "center" else "left")
@@ -3215,9 +3252,9 @@ def _render_master_banner_by_size(
             _draw_vertical_black_gradient(canvas, y=1154, height=766, opacity=0.75)
 
         logo_font = _load_font(headline_italic_font_path, 109)
-        title_font = _load_font(headline_font_path, 132)
-        subtitle_font = _load_font(text_bold_font_path, 52)
-        disclaimer_font = _load_font(text_regular_font_path, 16)
+        title_font = _load_font(headline_font_path, _scaled_font_size(132, banner_font_scale))
+        subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(52, banner_font_scale))
+        disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(16, banner_font_scale))
 
         title_width = 920
         subtitle_width = 920
@@ -3265,6 +3302,7 @@ def _render_master_banner_by_size(
                 bottom_text=badge_bottom_text,
                 text_align=align_mode,
                 headline_font_path=headline_font_path,
+                font_scale=banner_font_scale,
                 badge_fill_hex=accent_hex,
                 shift_right_px=max(0, int(badge_shift_x or 0)),
                 shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -3376,6 +3414,7 @@ def render_banner_images(
         subtitle = str((text_set or {}).get("subtitle", "")).strip()
         disclaimer = str((text_set or {}).get("disclaimer", "")).strip()
         text_align = _normalize_text_align(str((text_set or {}).get("textAlign", "left")))
+        banner_language = str((text_set or {}).get("language", "general")).strip().lower() or "general"
         badge_enabled = bool((text_set or {}).get("badgeEnabled", False))
         badge_top_text = str((text_set or {}).get("badgeTopText", "")).strip()
         badge_bottom_text = str((text_set or {}).get("badgeBottomText", "")).strip()
@@ -3421,6 +3460,7 @@ def render_banner_images(
                 image_scale=render_image_scale,
                 image_shift_x=render_image_shift_x,
                 image_shift_y=render_image_shift_y,
+                banner_language=banner_language,
             )
 
             file_name = f"banner_{normalized_layout}_set{set_index + 1}_{size_key}_{now}.png"

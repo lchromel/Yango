@@ -32,6 +32,11 @@ const TEXT_ALIGN_OPTIONS = [
   { value: "center", icon: "./assets/icons/text-align-center.svg", alt: "Align center" },
   { value: "right", icon: "./assets/icons/text-align-right.svg", alt: "Align right" },
 ];
+const BANNER_LANGUAGE_OPTIONS = [
+  { value: "general", label: "General" },
+  { value: "ethiopia", label: "Ethiopia" },
+  { value: "nepal", label: "Nepal" },
+];
 
 const BANNER_SIZES = [
   { value: "1200x1200", slotClass: "slot-1200x1200" },
@@ -145,6 +150,7 @@ const state = {
       subtitle: "Book your car in seconds and enjoy premium routes.",
       disclaimer: "Terms and conditions apply",
       textAlign: "left",
+      language: "general",
       badgeEnabled: false,
       badgeTopText: "From",
       badgeBottomText: "65 AED",
@@ -1549,6 +1555,35 @@ function renderTextSetsEditor() {
     }
     card.appendChild(setHeader);
 
+    const languageRow = document.createElement("div");
+    languageRow.className = "banner-language-row";
+    const languageLabel = document.createElement("label");
+    languageLabel.className = "field-label";
+    languageLabel.textContent = "Language:";
+    const languageSelect = document.createElement("select");
+    languageSelect.className = "banner-language-select";
+    languageSelect.setAttribute("aria-label", `Language for set ${index + 1}`);
+    const normalizedLanguage = String(set.language || "general").trim().toLowerCase();
+    const currentLanguage = BANNER_LANGUAGE_OPTIONS.some((optionDef) => optionDef.value === normalizedLanguage)
+      ? normalizedLanguage
+      : "general";
+    BANNER_LANGUAGE_OPTIONS.forEach((optionDef) => {
+      const option = document.createElement("option");
+      option.value = optionDef.value;
+      option.textContent = optionDef.label;
+      option.selected = currentLanguage === optionDef.value;
+      languageSelect.appendChild(option);
+    });
+    languageSelect.addEventListener("change", (event) => {
+      state.bannerTextSets[index].language = String(event.target.value || "general");
+      invalidateRenderedBanners();
+      renderBannerSetsView();
+      renderTopAction();
+    });
+    languageRow.appendChild(languageLabel);
+    languageRow.appendChild(languageSelect);
+    card.appendChild(languageRow);
+
     const fields = [
       { key: "title", label: "Title" },
       { key: "subtitle", label: "Subtitle" },
@@ -2062,6 +2097,7 @@ function buildRenderPayload() {
       subtitle: String(set.subtitle || "").trim(),
       disclaimer: String(set.disclaimer || "").trim(),
       textAlign: String(set.textAlign || "left").trim().toLowerCase(),
+      language: String(set.language || "general").trim().toLowerCase(),
       badgeEnabled: Boolean(set.badgeEnabled),
       badgeTopText: String(set.badgeTopText || "").trim(),
       badgeBottomText: String(set.badgeBottomText || "").trim(),
@@ -2719,9 +2755,11 @@ addTextSetBtn.addEventListener("click", () => {
           title: "Drive with comfort every day",
           subtitle: "Book your car in seconds and enjoy premium routes.",
           disclaimer: "Terms and conditions apply",
+          textAlign: "left",
           badgeEnabled: false,
           badgeTopText: "From",
           badgeBottomText: "65 AED",
+          language: "general",
           badgeShiftX: 0,
           badgeShiftY: 0,
         };
@@ -2732,6 +2770,7 @@ addTextSetBtn.addEventListener("click", () => {
     subtitle: String(sourceSet.subtitle || ""),
     disclaimer: String(sourceSet.disclaimer || ""),
     textAlign: String(sourceSet.textAlign || "left"),
+    language: String(sourceSet.language || "general"),
     badgeEnabled: Boolean(sourceSet.badgeEnabled),
     badgeTopText: String(sourceSet.badgeTopText || "From"),
     badgeBottomText: String(sourceSet.badgeBottomText || "65 AED"),

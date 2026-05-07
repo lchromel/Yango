@@ -569,6 +569,27 @@ body {
   opacity: 0.6;
 }
 
+.banner-language-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.banner-language-select {
+  min-width: 112px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0e0e0e;
+  font-family: "Yango Group Text", "Arial", sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
 .text-set-field + .text-set-field {
   margin-top: 6px;
 }
