@@ -790,6 +790,7 @@ def call_openai(
     vehicle_type: str = "car",
     composition: str = "",
     model_description: str = "",
+    face_reference_image_url: str = "",
     situation_description: str = "",
 ) -> str:
     if not os.getenv("OPENAI_API_KEY"):
@@ -828,6 +829,7 @@ Selected inputs:
 - Vehicle to use: {vehicle_descriptor}
 - Composition: {composition or "not specified"}
 - Hero/model description: {model_description or "not provided"}
+- Face reference image: {"provided" if face_reference_image_url else "not provided"}
 - Situation description: {situation_description or "not provided"}
 
 Composition rule:
@@ -835,6 +837,9 @@ Composition rule:
 
 Vehicle rule:
 {vehicle_rule}
+
+Face reference rule:
+{"Use the provided reference image only for the hero/model's facial features: face shape, eyes, nose, mouth, skin tone, expression, and other face identity traits. Do not copy clothing, accessories, pose, lighting, background, camera angle, body shape, age cues beyond the face, or any non-facial detail from the reference image." if face_reference_image_url else "No face reference image is provided, so create the hero/model from the written description only."}
 
 Country localization:
 The scene must feel specifically local to {country or "the selected country"} through architecture, materials, climate, demographics, and small real-life details.
@@ -852,6 +857,7 @@ Final check before answering:
 - Car models include latest body-year naming.
 - Vehicle color follows the selected color rule exactly.
 - Impossible car-only compositions are not used for motorcycle or tuk-tuk.
+- If a face reference image is provided, the prompt explicitly says to take only facial features from the reference image and not clothing, accessories, pose, background, or other non-facial details.
 - If a phone appears, it is red.
 - No logos, no app UI, no text, no watermark.
 - The word illustration is not used.
@@ -1680,6 +1686,32 @@ def generate_image_with_openai(prompt: str, *, country: str = "") -> tuple[str, 
         raise RuntimeError("OpenAI image generation returned no b64_json data")
 
     image_bytes = base64.b64decode(b64_json)
+    local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country)
+    return local_url, local_url
+
+
+def generate_image_with_face_reference(prompt: str, face_reference_image_url: str, *, country: str = "") -> tuple[str, str]:
+    reference_url = str(face_reference_image_url or "").strip()
+    if not reference_url:
+        return generate_image_with_openai(prompt, country=country)
+
+    reference_image = _fetch_image_from_url(reference_url).convert("RGB")
+    reference_buf = BytesIO()
+    reference_image.save(reference_buf, format="PNG")
+    reference_b64 = base64.b64encode(reference_buf.getvalue()).decode("ascii")
+    reference_prompt = (
+        f"{prompt}\n\n"
+        "Use the attached reference image only for the hero/model's facial features. "
+        "Match face shape, eyes, nose, mouth, skin tone, expression, and other face identity traits from the reference image. "
+        "Do not copy clothing, accessories, pose, lighting, background, camera angle, body shape, or any non-facial detail from the reference image."
+    )
+    image_bytes = _gemini_generate_image_bytes(
+        parts=[
+            {"text": reference_prompt},
+            {"inline_data": {"mime_type": "image/png", "data": reference_b64}},
+        ],
+        aspect_ratio="16:9",
+    )
     local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country)
     return local_url, local_url
 
@@ -3531,6 +3563,7 @@ class Handler(SimpleHTTPRequestHandler):
                 vehicle_type = str(body.get("vehicleType", "car")).strip()
                 composition = str(body.get("composition", "")).strip()
                 model_description = str(body.get("modelDescription", "")).strip()
+                face_reference_image_url = str(body.get("faceReferenceImageUrl", "")).strip()
                 situation_description = str(body.get("situationDescription", "")).strip()
                 if not car_model:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "vehicleModel is required"})
@@ -3555,9 +3588,17 @@ class Handler(SimpleHTTPRequestHandler):
                     vehicle_type=vehicle_type,
                     composition=composition,
                     model_description=model_description,
+                    face_reference_image_url=face_reference_image_url,
                     situation_description=situation_description,
                 )
-                image_url, local_image_url = generate_image_with_openai(prompt, country=country)
+                if face_reference_image_url:
+                    image_url, local_image_url = generate_image_with_face_reference(
+                        prompt,
+                        face_reference_image_url,
+                        country=country,
+                    )
+                else:
+                    image_url, local_image_url = generate_image_with_openai(prompt, country=country)
                 self._send_json(
                     HTTPStatus.OK,
                     {

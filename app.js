@@ -108,6 +108,8 @@ const state = {
   transportMenuOpen: false,
   selectedComposition: "",
   heroDescription: "",
+  faceReferenceImageUrl: "",
+  faceReferenceStatus: "none",
   situationDescription: "",
   basePromptText: "",
   editPromptText: "",
@@ -277,6 +279,12 @@ const transportMenuEl = document.getElementById("transportMenu");
 const compositionSectionEl = document.getElementById("compositionSection");
 const compositionRowEl = document.getElementById("compositionRow");
 const heroDescriptionInputEl = document.getElementById("heroDescriptionInput");
+const faceReferenceUploadBtnEl = document.getElementById("faceReferenceUploadBtn");
+const faceReferenceInputEl = document.getElementById("faceReferenceInput");
+const faceReferenceStatusEl = document.getElementById("faceReferenceStatus");
+const faceReferenceSelectedBoxEl = document.getElementById("faceReferenceSelectedBox");
+const faceReferencePreviewEl = document.getElementById("faceReferencePreview");
+const faceReferenceClearBtnEl = document.getElementById("faceReferenceClearBtn");
 const situationDescriptionInputEl = document.getElementById("situationDescriptionInput");
 const bannerAccentColorInput = document.getElementById("bannerAccentColorInput");
 const generateBtn = document.getElementById("generateBtn");
@@ -847,6 +855,21 @@ function renderEditSource() {
   }
 }
 
+function renderFaceReference() {
+  if (faceReferenceStatusEl) {
+    faceReferenceStatusEl.textContent = SOURCE_STATUS[state.faceReferenceStatus] || SOURCE_STATUS.none;
+  }
+  if (faceReferenceSelectedBoxEl && faceReferencePreviewEl) {
+    const hasReference = Boolean(state.faceReferenceImageUrl);
+    faceReferenceSelectedBoxEl.classList.toggle("hidden", !hasReference);
+    if (hasReference) {
+      faceReferencePreviewEl.src = state.faceReferenceImageUrl;
+    } else {
+      faceReferencePreviewEl.removeAttribute("src");
+    }
+  }
+}
+
 async function fetchImageLibrary() {
   try {
     const response = await fetch("/api/library-images", {
@@ -1140,6 +1163,7 @@ function renderUiState() {
   renderTopAction();
   renderImageControls();
   renderEditSource();
+  renderFaceReference();
   imagePreviewFrameEl.classList.remove("hidden");
   resultImageEl.src = state.imageUrl || "";
   resultImageEl.classList.toggle("hidden", !state.imageUrl);
@@ -1932,6 +1956,7 @@ async function generatePrompt() {
         colorName: selectedTransport.colorName,
         composition: state.selectedComposition,
         modelDescription: state.heroDescription,
+        faceReferenceImageUrl: state.faceReferenceImageUrl,
         situationDescription: state.situationDescription,
         carModel: currentCarModel,
       }),
@@ -2332,6 +2357,37 @@ document.addEventListener("click", (event) => {
 heroDescriptionInputEl.addEventListener("input", (event) => {
   state.heroDescription = event.target.value;
 });
+
+if (faceReferenceUploadBtnEl && faceReferenceInputEl) {
+  faceReferenceUploadBtnEl.addEventListener("click", () => faceReferenceInputEl.click());
+  faceReferenceInputEl.addEventListener("change", async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    state.faceReferenceStatus = "uploading";
+    renderFaceReference();
+    try {
+      const localUrl = await uploadCustomImage(file);
+      if (!localUrl) throw new Error("Upload failed");
+      state.faceReferenceImageUrl = localUrl;
+      state.faceReferenceStatus = "uploaded";
+      renderFaceReference();
+    } catch (error) {
+      state.faceReferenceStatus = "failed";
+      showError(error, "Face reference upload failed. Please try another file.");
+      renderFaceReference();
+    } finally {
+      faceReferenceInputEl.value = "";
+    }
+  });
+}
+
+if (faceReferenceClearBtnEl) {
+  faceReferenceClearBtnEl.addEventListener("click", () => {
+    state.faceReferenceImageUrl = "";
+    state.faceReferenceStatus = "none";
+    renderFaceReference();
+  });
+}
 
 situationDescriptionInputEl.addEventListener("input", (event) => {
   state.situationDescription = event.target.value;

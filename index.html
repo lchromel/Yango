@@ -106,6 +106,25 @@
               <textarea id="heroDescriptionInput" class="text-area image-text-area" rows="2" placeholder="Describe the model"></textarea>
             </section>
 
+            <section class="section source-section photo-style-only">
+              <div class="source-left">
+                <p class="field-label">Face Reference:</p>
+                <p id="faceReferenceStatus" class="source-status">Status</p>
+              </div>
+              <button id="faceReferenceUploadBtn" class="upload-icon-btn" type="button" aria-label="Upload face reference">
+                <img class="upload-icon" src="./assets/icons/Upload.svg" alt="" aria-hidden="true" />
+              </button>
+              <div id="faceReferenceSelectedBox" class="selected-source hidden">
+                <div class="selected-source-preview-wrap">
+                  <img id="faceReferencePreview" class="selected-source-preview" alt="Selected face reference" />
+                </div>
+                <button id="faceReferenceClearBtn" class="clear-source-btn" type="button" aria-label="Clear face reference">
+                  <span class="clear-source-glyph" aria-hidden="true"></span>
+                </button>
+              </div>
+              <input id="faceReferenceInput" class="file-input-hidden" type="file" accept="image/png,image/jpeg,image/webp" />
+            </section>
+
             <section class="section photo-style-only">
               <label class="field-label" for="situationDescriptionInput">Situation</label>
               <textarea id="situationDescriptionInput" class="text-area image-text-area" rows="3" placeholder="Describe what you want"></textarea>
