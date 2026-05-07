@@ -829,6 +829,27 @@
       ]
     },
     {
+      "country": "Rwanda",
+      "tariffs": [
+        {
+          "label": "Moto",
+          "basicClass": "Moto",
+          "tariffCode": "moto",
+          "model": "Moto",
+          "vehicleType": "moto",
+          "orders": 0
+        },
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "Toyota Corolla 2010",
+          "vehicleType": "car",
+          "orders": 0
+        }
+      ]
+    },
+    {
       "country": "Saudi Arabia",
       "tariffs": [
         {
