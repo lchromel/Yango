@@ -1690,7 +1690,12 @@ def generate_image_with_openai(prompt: str, *, country: str = "") -> tuple[str, 
     return local_url, local_url
 
 
-def generate_image_with_face_reference(prompt: str, face_reference_image_url: str, *, country: str = "") -> tuple[str, str]:
+def generate_image_with_openai_face_reference(
+    prompt: str,
+    face_reference_image_url: str,
+    *,
+    country: str = "",
+) -> tuple[str, str]:
     reference_url = str(face_reference_image_url or "").strip()
     if not reference_url:
         return generate_image_with_openai(prompt, country=country)
@@ -1698,20 +1703,42 @@ def generate_image_with_face_reference(prompt: str, face_reference_image_url: st
     reference_image = _fetch_image_from_url(reference_url).convert("RGB")
     reference_buf = BytesIO()
     reference_image.save(reference_buf, format="PNG")
-    reference_b64 = base64.b64encode(reference_buf.getvalue()).decode("ascii")
+    reference_buf.seek(0)
+    reference_buf.name = "face_reference.png"
     reference_prompt = (
         f"{prompt}\n\n"
         "Use the attached reference image only for the hero/model's facial features. "
         "Match face shape, eyes, nose, mouth, skin tone, expression, and other face identity traits from the reference image. "
         "Do not copy clothing, accessories, pose, lighting, background, camera angle, body shape, or any non-facial detail from the reference image."
     )
-    image_bytes = _gemini_generate_image_bytes(
-        parts=[
-            {"text": reference_prompt},
-            {"inline_data": {"mime_type": "image/png", "data": reference_b64}},
-        ],
-        aspect_ratio="16:9",
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+
+    timeout_seconds = float(os.getenv("OPENAI_IMAGE_TIMEOUT_SECONDS", "480") or "480")
+    client = OpenAI(api_key=api_key, timeout=timeout_seconds, max_retries=1)
+    model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
+    size = os.getenv("OPENAI_IMAGE_SIZE", "1536x1024")
+    quality = os.getenv("OPENAI_IMAGE_QUALITY", "high")
+    response = client.images.edit(
+        model=model,
+        image=reference_buf,
+        prompt=reference_prompt,
+        size=size,
+        quality=quality,
+        n=1,
+        output_format="png",
+        input_fidelity="high",
     )
+    if not response.data:
+        raise RuntimeError("OpenAI image generation returned no image data")
+
+    image = response.data[0]
+    b64_json = getattr(image, "b64_json", "") or ""
+    if not b64_json:
+        raise RuntimeError("OpenAI image generation returned no b64_json data")
+
+    image_bytes = base64.b64decode(b64_json)
     local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country)
     return local_url, local_url
 
@@ -3592,7 +3619,7 @@ class Handler(SimpleHTTPRequestHandler):
                     situation_description=situation_description,
                 )
                 if face_reference_image_url:
-                    image_url, local_image_url = generate_image_with_face_reference(
+                    image_url, local_image_url = generate_image_with_openai_face_reference(
                         prompt,
                         face_reference_image_url,
                         country=country,
