@@ -1728,7 +1728,6 @@ def generate_image_with_openai_face_reference(
         quality=quality,
         n=1,
         output_format="png",
-        input_fidelity="high",
     )
     if not response.data:
         raise RuntimeError("OpenAI image generation returned no image data")
