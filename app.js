@@ -1,4 +1,4 @@
-const VEHICLE_DATA_URL = "./assets/data/vehicles.json";
+const VEHICLE_DATA_URL = "./assets/data/vehicles.json?v=20260507-rwanda";
 const IMAGE_SERVICE = "Ride-hailing";
 const IMAGE_STYLES = [
   { label: "Photo", value: "photo" },
