@@ -58,7 +58,13 @@ def load_tokens_from_file() -> None:
                 if key is not None and value is not None:
                     env_key = key.strip().upper()
                     env_value = value.strip().strip("\"'")
-                    if env_key in {"TELEGRAM_BOT_TOKEN", "OPENAI_API_KEY", "OPENAI_MODEL"} and env_value:
+                    if env_key in {
+                        "TELEGRAM_BOT_TOKEN",
+                        "OPENAI_API_KEY",
+                        "OPENAI_MODEL",
+                        "GEMINI_API_KEY",
+                        "GEMINI_MODEL",
+                    } and env_value:
                         os.environ.setdefault(env_key, env_value)
                     continue
 

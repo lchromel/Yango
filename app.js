@@ -2,6 +2,7 @@ const VEHICLE_DATA_URL = "./assets/data/vehicles.json?v=20260507-rwanda";
 const IMAGE_SERVICE = "Ride-hailing";
 const IMAGE_STYLES = [
   { label: "Photo", value: "photo" },
+  { label: "3D", value: "3d" },
   { label: "Edit", value: "edit" },
 ];
 const IMAGE_REQUEST_TIMEOUT_MS = 8 * 60 * 1000;
@@ -292,6 +293,8 @@ const faceReferenceSelectedBoxEl = document.getElementById("faceReferenceSelecte
 const faceReferencePreviewEl = document.getElementById("faceReferencePreview");
 const faceReferenceClearBtnEl = document.getElementById("faceReferenceClearBtn");
 const situationDescriptionInputEl = document.getElementById("situationDescriptionInput");
+const situationDescriptionSectionEl = document.getElementById("situationDescriptionSection");
+const situationDescriptionLabelEl = document.getElementById("situationDescriptionLabel");
 const bannerAccentColorInput = document.getElementById("bannerAccentColorInput");
 const generateBtn = document.getElementById("generateBtn");
 const photoStyleOnlyEls = Array.from(document.querySelectorAll(".photo-style-only"));
@@ -1140,6 +1143,7 @@ function invalidateRenderedBanners(resetAutoRenderEligibility = true) {
 function renderUiState() {
   const isBusy = state.generating || state.bannerRendering || state.videoGenerating || state.videoRendering;
   const isEditStyle = state.selectedImageStyle === "edit";
+  const is3dStyle = state.selectedImageStyle === "3d";
   loaderEl.classList.toggle("hidden", !isBusy);
   if (loaderLabelEl) {
     if (state.generating) {
@@ -1156,7 +1160,13 @@ function renderUiState() {
       loaderLabelEl.textContent = "Working";
     }
   }
-  generateBtn.disabled = state.generating || (isEditStyle ? !state.editSourceImageUrl : (!state.selectedCountry || !getSelectedTransport()));
+  generateBtn.disabled =
+    state.generating ||
+    (isEditStyle
+      ? !state.editSourceImageUrl
+      : is3dStyle
+        ? !state.situationDescription.trim()
+        : (!state.selectedCountry || !getSelectedTransport()));
   renderBannersBtn.disabled = state.bannerRendering || !state.bannerSourceImageUrl;
   if (generateVideoBtnEl) {
     const selectedSavedVideo = findLibraryVideoByUrl(state.videoResultUrl);
@@ -1176,7 +1186,8 @@ function renderUiState() {
   promptRowEl.classList.toggle("hidden", !state.imageUrl);
   if (quickActionRowEl) {
     const brandingReferenceUrl = getBrandingReferenceUrl();
-    quickActionRowEl.classList.toggle("hidden", isEditStyle || !state.imageUrl);
+    const is3dStyle = state.selectedImageStyle === "3d";
+    quickActionRowEl.classList.toggle("hidden", isEditStyle || is3dStyle || !state.imageUrl);
     if (seatbeltActionBtn) {
       seatbeltActionBtn.disabled = state.generating || !state.imageUrl;
     }
@@ -1267,11 +1278,23 @@ function renderCompositions() {
 
 function renderImageControls() {
   const isEditStyle = state.selectedImageStyle === "edit";
+  const is3dStyle = state.selectedImageStyle === "3d";
   renderStyleControl();
   photoStyleOnlyEls.forEach((element) => {
-    element.classList.toggle("hidden", isEditStyle);
+    element.classList.toggle("hidden", isEditStyle || is3dStyle);
   });
-  if (isEditStyle) {
+  if (situationDescriptionSectionEl) {
+    situationDescriptionSectionEl.classList.toggle("hidden", isEditStyle);
+  }
+  if (situationDescriptionLabelEl) {
+    situationDescriptionLabelEl.textContent = is3dStyle ? "Description" : "Situation";
+  }
+  if (situationDescriptionInputEl) {
+    situationDescriptionInputEl.placeholder = is3dStyle
+      ? "Describe the 3D object you want"
+      : "Describe what you want";
+  }
+  if (isEditStyle || is3dStyle) {
     state.countryMenuOpen = false;
     state.transportMenuOpen = false;
     if (countryMenuEl) countryMenuEl.classList.add("hidden");
@@ -1951,15 +1974,20 @@ async function generatePrompt() {
   }
 
   const selectedTransport = getSelectedTransport();
-  if (!state.selectedCountry) {
+  const is3dStyle = state.selectedImageStyle === "3d";
+  if (is3dStyle && !state.situationDescription.trim()) {
+    alert("DESCRIBE WHAT TO GENERATE");
+    return;
+  }
+  if (!is3dStyle && !state.selectedCountry) {
     alert("PLEASE SELECT COUNTRY");
     return;
   }
-  if (!selectedTransport) {
+  if (!is3dStyle && !selectedTransport) {
     alert("PLEASE SELECT VEHICLE");
     return;
   }
-  const currentCarModel = selectedTransport.model;
+  const currentCarModel = selectedTransport?.model || "";
 
   const previousImageUrl = state.imageUrl;
   state.generating = true;
@@ -1983,12 +2011,12 @@ async function generatePrompt() {
         service: IMAGE_SERVICE,
         style: getSelectedImageStyle().label,
         country: state.selectedCountry,
-        transportLabel: selectedTransport.label,
-        transportCode: selectedTransport.tariffCode,
-        basicClass: selectedTransport.basicClass,
-        vehicleModel: selectedTransport.model,
-        vehicleType: selectedTransport.vehicleType,
-        colorName: selectedTransport.colorName,
+        transportLabel: selectedTransport?.label || "",
+        transportCode: selectedTransport?.tariffCode || "",
+        basicClass: selectedTransport?.basicClass || "",
+        vehicleModel: selectedTransport?.model || "",
+        vehicleType: selectedTransport?.vehicleType || "",
+        colorName: selectedTransport?.colorName || "",
         composition: state.selectedComposition,
         modelDescription: state.heroDescription,
         faceReferenceImageUrl: state.faceReferenceImageUrl,
@@ -2427,6 +2455,9 @@ if (faceReferenceClearBtnEl) {
 
 situationDescriptionInputEl.addEventListener("input", (event) => {
   state.situationDescription = event.target.value;
+  if (state.selectedImageStyle === "3d") {
+    renderUiState();
+  }
 });
 
 if (bannerAccentColorInput) {

@@ -64,6 +64,15 @@ UNCROP_TARGET_WIDTH = 3200
 UNCROP_TARGET_HEIGHT = 2472
 UNCROP_MIN_HORIZONTAL_MARGIN = 262
 UNCROP_MIN_VERTICAL_MARGIN = 202
+THREE_D_STYLE_REFERENCE_PATHS = [
+    ROOT / "assets" / "style-references" / "3d" / "safety-vest.jpeg",
+    ROOT / "assets" / "style-references" / "3d" / "car-seat.jpeg",
+    ROOT / "assets" / "style-references" / "3d" / "side-mirror.jpeg",
+    ROOT / "assets" / "style-references" / "3d" / "driving-licence.jpeg",
+    ROOT / "assets" / "style-references" / "3d" / "steering-wheel.jpeg",
+    ROOT / "assets" / "style-references" / "3d" / "traffic-light.png",
+    ROOT / "assets" / "style-references" / "3d" / "fingerprint-lock.png",
+]
 WEB_APP_BASIC_AUTH_USERNAME = os.getenv("WEB_APP_BASIC_AUTH_USERNAME", "").strip()
 WEB_APP_BASIC_AUTH_PASSWORD = os.getenv("WEB_APP_BASIC_AUTH_PASSWORD", "")
 AUTH_COOKIE_NAME = "drive_perf_auth"
@@ -160,6 +169,21 @@ Urban Fashion x Documentary Realism for ride-hailing performance visuals.
 - Background people, if present, must be turned away, in profile, blurred, or cropped, never staring at the main characters.
 - Use warm color grading, natural light or flash, texture-focused realism, and cropped asymmetrical composition.
 - Do not show logos, branding, app UI, watermarks, or text.
+"""
+
+THREE_D_VISUAL_GUIDE = """
+Premium tactile 3D object render style for Yango Perf asset generation.
+- Always write the final prompt in English and return only the prompt text.
+- The final prompt must be optimized for Nano Banana 2 / Gemini image generation.
+- Create a single hero object or a small tightly related object set, not a full scene.
+- Use a bold solid Yango-red background with a subtle studio gradient, no props unless requested.
+- Use high-end 3D product-render realism: rounded bevels, thick edges, soft imperfections, realistic material grain, tiny stitching, mesh, rubber, brushed metal, glass, holographic film, LED diffusion, or fabric weave when relevant.
+- Composition should be close, cropped, asymmetrical, floating or isolated, with the object filling most of the frame and a strong premium commercial silhouette.
+- Lighting uses warm golden rim light from one side, soft large studio key light, clean shadows, and refined specular highlights.
+- Camera uses macro/product perspective, low or three-quarter angle, shallow but controlled depth of field, no fisheye distortion.
+- No people, no hands, no logos, no UI, no watermarks, no readable text unless the user explicitly asks for text.
+- If the user asks for a document, card, licence, sign, label, or screen, keep text minimal, generic, and mostly unreadable unless exact text is requested.
+- Avoid cartoon, toy-like plastic, flat vector, low-poly, cluttered background, photoreal street photography, and generic stock imagery.
 """
 
 COMPOSITION_RULES = {
@@ -884,6 +908,73 @@ Final check before answering:
     return prompt
 
 
+def _mime_type_for_image_path(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if suffix == ".webp":
+        return "image/webp"
+    return "image/png"
+
+
+def _image_data_url_from_path(path: Path) -> str:
+    raw = path.read_bytes()
+    encoded = base64.b64encode(raw).decode("ascii")
+    return f"data:{_mime_type_for_image_path(path)};base64,{encoded}"
+
+
+def _three_d_reference_paths() -> list[Path]:
+    return [path for path in THREE_D_STYLE_REFERENCE_PATHS if path.exists()]
+
+
+def generate_three_d_prompt_with_openai(description: str) -> str:
+    if not os.getenv("OPENAI_API_KEY"):
+        raise RuntimeError("OPENAI_API_KEY is not set")
+
+    request = str(description or "").strip()
+    if not request:
+        raise RuntimeError("Description is required")
+
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    content: list[dict] = [
+        {
+            "type": "input_text",
+            "text": (
+                "Create one final image-generation prompt for Nano Banana 2.\n\n"
+                f"User description:\n{request}\n\n"
+                "Use the attached images only as style references. Do not copy their exact objects unless the user asks for the same object. "
+                "Extract the shared visual language: bold red studio background, premium tactile 3D realism, cropped isolated object composition, "
+                "warm rim light, detailed materials, bevels, texture, and polished commercial product-render finish.\n\n"
+                "Return only the final prompt text."
+            ),
+        }
+    ]
+    for path in _three_d_reference_paths():
+        content.append({"type": "input_image", "image_url": _image_data_url_from_path(path)})
+
+    response = client.responses.create(
+        model=model,
+        input=[
+            {
+                "role": "system",
+                "content": (
+                    "You write strict production-ready prompts for AI image generators. "
+                    "Optimize every answer specifically for Nano Banana 2 / Gemini image generation. "
+                    "Return only the final prompt text.\n\n"
+                    f"--- 3D STYLE GUIDE START ---\n{THREE_D_VISUAL_GUIDE}\n--- 3D STYLE GUIDE END ---"
+                ),
+            },
+            {"role": "user", "content": content},
+        ],
+    )
+
+    prompt = (response.output_text or "").strip()
+    if not prompt:
+        raise RuntimeError("OpenAI returned an empty 3D prompt")
+    return prompt
+
+
 def generate_video_prompt_with_openai(
     car_model: str,
     image_url: str,
@@ -1577,6 +1668,7 @@ def _gemini_generate_image_bytes(
     *,
     parts: list[dict],
     aspect_ratio: Optional[str] = None,
+    retry_prefix: str = "",
 ) -> bytes:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -1604,9 +1696,11 @@ def _gemini_generate_image_bytes(
 
     retry_parts = [dict(part) for part in parts]
     if retry_parts and isinstance(retry_parts[0], dict) and "text" in retry_parts[0]:
+        prefix = retry_prefix.strip() or (
+            "Return an image as the image output. Do not call tools or functions. Do not answer with text only."
+        )
         retry_parts[0]["text"] = (
-            "Edit the provided image and return the edited image as the image output. "
-            "Do not call tools or functions. Do not answer with text only. "
+            f"{prefix} "
             f"{retry_parts[0]['text']}"
         )
 
@@ -1622,7 +1716,7 @@ def _gemini_generate_image_bytes(
         debug_details.extend(attempt_details)
 
     suffix = f" Details: {json.dumps(debug_details, ensure_ascii=False)[:1200]}" if debug_details else ""
-    raise RuntimeError(f"Gemini model {model} did not return an edited image.{suffix}")
+    raise RuntimeError(f"Gemini model {model} did not return an image.{suffix}")
 
 
 def _extract_gemini_image_bytes(response: dict) -> tuple[Optional[bytes], list[dict]]:
@@ -1781,8 +1875,50 @@ def edit_image_with_gemini(
     image_bytes = _gemini_generate_image_bytes(
         parts=parts,
         aspect_ratio=aspect_ratio.strip() or None,
+        retry_prefix=(
+            "Edit the provided image and return the edited image as the image output. "
+            "Do not call tools or functions. Do not answer with text only."
+        ),
     )
     return _save_generated_image_bytes(image_bytes, prefix="edited", country=country)
+
+
+def generate_three_d_image_with_gemini(prompt: str, *, country: str = "") -> tuple[str, str]:
+    final_prompt = str(prompt or "").strip()
+    if not final_prompt:
+        raise RuntimeError("prompt is required")
+
+    parts: list[dict] = [
+        {
+            "text": (
+                "Generate a new image from this prompt. Use the attached images only as style references for the red-background "
+                "premium tactile 3D render look; do not copy their exact objects unless requested in the prompt. "
+                "Return the generated image as image output, not a text description.\n\n"
+                f"{final_prompt}"
+            )
+        }
+    ]
+    for path in _three_d_reference_paths():
+        raw = path.read_bytes()
+        parts.append(
+            {
+                "inline_data": {
+                    "mime_type": _mime_type_for_image_path(path),
+                    "data": base64.b64encode(raw).decode("ascii"),
+                }
+            }
+        )
+
+    image_bytes = _gemini_generate_image_bytes(
+        parts=parts,
+        aspect_ratio=os.getenv("GEMINI_3D_ASPECT_RATIO", "4:3").strip() or None,
+        retry_prefix=(
+            "Generate a new image and return it as image output. "
+            "Use attached images only as visual style references. Do not answer with text only."
+        ),
+    )
+    local_url = _save_generated_image_bytes(image_bytes, prefix="generated_3d", country=country or "3d")
+    return local_url, local_url
 
 
 def _download_remote_bytes(url: str) -> bytes:
@@ -3647,6 +3783,22 @@ class Handler(SimpleHTTPRequestHandler):
                 model_description = str(body.get("modelDescription", "")).strip()
                 face_reference_image_url = str(body.get("faceReferenceImageUrl", "")).strip()
                 situation_description = str(body.get("situationDescription", "")).strip()
+                if style.strip().lower() == "3d":
+                    prompt_source = situation_description or model_description
+                    if not prompt_source:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "description is required"})
+                        return
+                    prompt = generate_three_d_prompt_with_openai(prompt_source)
+                    image_url, local_image_url = generate_three_d_image_with_gemini(prompt, country=country or "3d")
+                    self._send_json(
+                        HTTPStatus.OK,
+                        {
+                            "image_url": image_url,
+                            "image_local_url": local_image_url,
+                            "prompt": prompt,
+                        },
+                    )
+                    return
                 if not car_model:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "vehicleModel is required"})
                     return
