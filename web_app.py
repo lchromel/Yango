@@ -2624,14 +2624,16 @@ def _layout_bottom_blocks(
 ) -> None:
     prepared: list[dict] = []
     total_h = 0
-    for idx, block in enumerate(blocks):
-        raw_text = block["text"]
+    for block in blocks:
+        raw_text = str(block.get("text", "") or "")
+        if not raw_text.strip():
+            continue
         font = block["font"]
         ratio = block["ratio"]
         wrap_width = block.get("wrap_width", width)
         text = _wrap_text_by_width(draw, raw_text, font, wrap_width)
         block_h = _measure_multiline_with_ratio(draw, text=text, font=font, line_height_ratio=ratio)
-        gap_before = block.get("gap_before", 0) if idx > 0 else 0
+        gap_before = block.get("gap_before", 0) if prepared else 0
         total_h += gap_before + block_h
         prepared.append(
             {
@@ -2849,7 +2851,7 @@ def _render_master_banner_by_size(
         "Transportation services are provided by third parties."
     )
     title_text = title.strip() or default_title_text
-    subtitle_text = subtitle.strip() or default_subtitle_text
+    subtitle_text = subtitle.strip()
     disclaimer_text = disclaimer.strip() or default_disclaimer_text
     align_mode = _normalize_text_align(text_align)
     accent_hex = _normalize_hex_color(accent_color, "#E3FF74")
@@ -3265,11 +3267,16 @@ def _render_master_banner_by_size(
         title_width = 920
         subtitle_width = 920
         disclaimer_width = 920
+        has_subtitle = bool(subtitle_text.strip())
         title_wrapped = _wrap_text_by_width(draw, title_text.upper(), title_font, title_width)
-        subtitle_wrapped = _wrap_text_by_width(draw, subtitle_text, subtitle_font, subtitle_width)
+        subtitle_wrapped = _wrap_text_by_width(draw, subtitle_text, subtitle_font, subtitle_width) if has_subtitle else ""
         disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, disclaimer_width)
         title_h = _measure_multiline_with_ratio(draw, text=title_wrapped, font=title_font, line_height_ratio=0.9)
-        subtitle_h = _measure_multiline_with_ratio(draw, text=subtitle_wrapped, font=subtitle_font, line_height_ratio=1.1)
+        subtitle_h = (
+            _measure_multiline_with_ratio(draw, text=subtitle_wrapped, font=subtitle_font, line_height_ratio=1.1)
+            if has_subtitle
+            else 0
+        )
         disclaimer_h = _measure_multiline_with_ratio(draw, text=disclaimer_wrapped, font=disclaimer_font, line_height_ratio=1.28)
         logo_box = draw.textbbox((0, 0), BRAND_LOGO_TEXT, font=logo_font)
         logo_w = max(1, logo_box[2] - logo_box[0])
@@ -3281,7 +3288,7 @@ def _render_master_banner_by_size(
         bottom_padding = 80
         total_h = (
             title_h
-            + gap_title_subtitle
+            + (gap_title_subtitle if has_subtitle else 0)
             + subtitle_h
             + gap_subtitle_logo
             + logo_h
@@ -3329,21 +3336,24 @@ def _render_master_banner_by_size(
             align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
             highlight_hex=accent_hex,
         )
-        cursor_y += title_h + gap_title_subtitle
-        _draw_multiline_with_ratio(
-            canvas,
-            draw,
-            x=80,
-            y=int(cursor_y),
-            text=subtitle_wrapped,
-            font=subtitle_font,
-            fill=main_text_fill,
-            line_height_ratio=1.1,
-            box_width=subtitle_width,
-            align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
-            highlight_hex=accent_hex,
-        )
-        cursor_y += subtitle_h + gap_subtitle_logo
+        cursor_y += title_h
+        if has_subtitle:
+            cursor_y += gap_title_subtitle
+            _draw_multiline_with_ratio(
+                canvas,
+                draw,
+                x=80,
+                y=int(cursor_y),
+                text=subtitle_wrapped,
+                font=subtitle_font,
+                fill=main_text_fill,
+                line_height_ratio=1.1,
+                box_width=subtitle_width,
+                align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
+                highlight_hex=accent_hex,
+            )
+            cursor_y += subtitle_h
+        cursor_y += gap_subtitle_logo
         if align_mode == "center":
             logo_x = (width - logo_w) // 2
         elif align_mode == "right":
