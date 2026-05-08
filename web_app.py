@@ -64,6 +64,7 @@ UNCROP_TARGET_WIDTH = 3200
 UNCROP_TARGET_HEIGHT = 2472
 UNCROP_MIN_HORIZONTAL_MARGIN = 262
 UNCROP_MIN_VERTICAL_MARGIN = 202
+THREE_D_ASPECT_RATIO = "4:3"
 THREE_D_STYLE_REFERENCE_PATHS = [
     ROOT / "assets" / "style-references" / "3d" / "safety-vest.jpeg",
     ROOT / "assets" / "style-references" / "3d" / "car-seat.jpeg",
@@ -1911,7 +1912,7 @@ def generate_three_d_image_with_gemini(prompt: str, *, country: str = "") -> tup
 
     image_bytes = _gemini_generate_image_bytes(
         parts=parts,
-        aspect_ratio=os.getenv("GEMINI_3D_ASPECT_RATIO", "4:3").strip() or None,
+        aspect_ratio=os.getenv("GEMINI_3D_ASPECT_RATIO", THREE_D_ASPECT_RATIO).strip() or THREE_D_ASPECT_RATIO,
         retry_prefix=(
             "Generate a new image and return it as image output. "
             "Use attached images only as visual style references. Do not answer with text only."
