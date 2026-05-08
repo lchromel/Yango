@@ -3559,12 +3559,19 @@ def render_banner_images(
     banner_image_overrides: Optional[dict[tuple[int, str], dict]] = None,
     country: str = "",
     banner_source_url: str = "",
-) -> tuple[list[dict], str, str]:
+) -> tuple[list[dict], str, str, dict]:
     _ensure_output_directories()
 
     source_image = None
     effective_image_url = str(image_url or "").strip()
     uncrop_warning = ""
+    uncrop_debug = {
+        "attempted": False,
+        "used_cache": False,
+        "source_kind": "",
+        "input_url": effective_image_url,
+        "output_url": "",
+    }
     if image_url:
         cached_record = get_image_library_record(image_url)
         cached_banner_source_url = str(banner_source_url or "").strip()
@@ -3573,18 +3580,30 @@ def render_banner_images(
             cached_banner_source_url = cached_banner_source_url or str(cached_record.get("banner_source_url", "")).strip()
             cached_country = str(cached_record.get("country", "")).strip()
         source_kind = str((cached_record or {}).get("kind") or _infer_library_kind_from_url(image_url)).strip()
+        uncrop_debug["source_kind"] = source_kind
+        if cached_record is None and source_kind == "uploaded":
+            cached_record = _upsert_image_library_record(
+                image_url,
+                kind="uploaded",
+                country="uploaded",
+                original_name=Path(urlparse(image_url).path).name,
+            )
         uncrop_country = "uploaded" if source_kind == "uploaded" else (country or cached_country or "other")
         try:
             if cached_banner_source_url and _is_cached_uncrop_current(cached_banner_source_url):
                 effective_image_url = cached_banner_source_url
+                uncrop_debug["used_cache"] = True
             else:
+                uncrop_debug["attempted"] = True
                 effective_image_url = uncrop_image_with_clipdrop(image_url, country=uncrop_country)
                 update_image_library_banner_source(image_url, effective_image_url)
+            uncrop_debug["output_url"] = effective_image_url
             source_image = _fetch_image_from_url(effective_image_url)
         except Exception as exc:
             # Safe fallback: keep banner generation available even if uncrop fails.
             uncrop_warning = str(exc) or "Clipdrop uncrop failed"
             effective_image_url = str(image_url).strip()
+            uncrop_debug["output_url"] = effective_image_url
             source_image = _fetch_image_from_url(image_url)
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
     normalized_layout = (layout_type or "photo").strip().lower() or "photo"
@@ -3659,7 +3678,7 @@ def render_banner_images(
                     "url": f"/output/banners/{file_name}",
                 }
             )
-    return results, effective_image_url, uncrop_warning
+    return results, effective_image_url, uncrop_warning, uncrop_debug
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -4130,7 +4149,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "imageUrl is required"})
                 return
 
-            banners, effective_image_url, uncrop_warning = render_banner_images(
+            banners, effective_image_url, uncrop_warning, uncrop_debug = render_banner_images(
                 image_url=image_url,
                 text_sets=text_sets,
                 layout_type=layout_type,
@@ -4167,6 +4186,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "banners": banners,
                     "source_image_url": effective_image_url,
                     "uncrop_warning": uncrop_warning,
+                    "uncrop_debug": uncrop_debug,
                     "library_image": library_image,
                 },
             )

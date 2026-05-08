@@ -2194,6 +2194,9 @@ async function createBanners() {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Render failed");
+    if (payload.uncrop_debug) {
+      console.info("Banner uncrop", payload.uncrop_debug);
+    }
     state.renderedBanners = (payload.banners || []).filter((item) => item && item.url && item.size);
     state.hasRenderedBanners = state.renderedBanners.length > 0;
     upsertStateLibraryImage(payload.library_image);
