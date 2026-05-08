@@ -60,10 +60,11 @@ IMAGE_LIBRARY_LOCK = threading.Lock()
 VIDEO_LIBRARY_FILE = EPHEMERAL_OUTPUT_ROOT / "video_library.json"
 VIDEO_LIBRARY_LOCK = threading.Lock()
 BRAND_LOGO_TEXT = "YANGO"
-UNCROP_TARGET_WIDTH = 3200
-UNCROP_TARGET_HEIGHT = 2472
-UNCROP_MIN_HORIZONTAL_MARGIN = 262
-UNCROP_MIN_VERTICAL_MARGIN = 202
+UNCROP_TARGET_WIDTH = 4096
+UNCROP_TARGET_HEIGHT = 3200
+UNCROP_MIN_HORIZONTAL_MARGIN = 900
+UNCROP_MIN_VERTICAL_MARGIN = 600
+UNCROP_VERTICAL_UP_RATIO = 0.4
 THREE_D_ASPECT_RATIO = "4:3"
 THREE_D_STYLE_REFERENCE_PATHS = [
     ROOT / "assets" / "style-references" / "3d" / "safety-vest.jpeg",
@@ -2024,7 +2025,7 @@ def _calculate_uncrop_extents(
     vertical_extend = target_height - height
     left = horizontal_extend // 2
     right = horizontal_extend - left
-    up = vertical_extend // 2
+    up = int(round(vertical_extend * UNCROP_VERTICAL_UP_RATIO))
     down = vertical_extend - up
     return left, right, up, down
 
@@ -2946,6 +2947,26 @@ def _transform_with_scale_and_shift(
     return nx, ny, sw, sh
 
 
+def _clamp_image_rect_to_canvas(
+    *,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    canvas_w: int,
+    canvas_h: int,
+) -> tuple[int, int, int, int]:
+    if w >= canvas_w:
+        x = min(0, max(canvas_w - w, x))
+    else:
+        x = int(round((canvas_w - w) / 2))
+    if h >= canvas_h:
+        y = min(0, max(canvas_h - h, y))
+    else:
+        y = int(round((canvas_h - h) / 2))
+    return x, y, w, h
+
+
 def _render_master_banner_by_size(
     *,
     bg_image: Optional[Image.Image],
@@ -3004,6 +3025,9 @@ def _render_master_banner_by_size(
             scale=image_scale,
             shift_x=int(image_shift_x),
             shift_y=int(image_shift_y),
+        )
+        img_x, img_y, img_w, img_h = _clamp_image_rect_to_canvas(
+            x=img_x, y=img_y, w=img_w, h=img_h, canvas_w=width, canvas_h=height
         )
         if bg_image is not None:
             canvas.paste(_resize_exact(bg_image, img_w, img_h).convert("RGBA"), (img_x, img_y))
@@ -3145,6 +3169,9 @@ def _render_master_banner_by_size(
             shift_x=int(image_shift_x),
             shift_y=int(image_shift_y),
         )
+        img_x, img_y, img_w, img_h = _clamp_image_rect_to_canvas(
+            x=img_x, y=img_y, w=img_w, h=img_h, canvas_w=width, canvas_h=height
+        )
         if bg_image is not None:
             canvas.paste(_resize_exact(bg_image, img_w, img_h).convert("RGBA"), (img_x, img_y))
         if show_gradients:
@@ -3285,6 +3312,9 @@ def _render_master_banner_by_size(
             shift_x=int(image_shift_x),
             shift_y=int(image_shift_y),
         )
+        img_x, img_y, img_w, img_h = _clamp_image_rect_to_canvas(
+            x=img_x, y=img_y, w=img_w, h=img_h, canvas_w=width, canvas_h=height
+        )
         if bg_image is not None:
             canvas.paste(_resize_exact(bg_image, img_w, img_h).convert("RGBA"), (img_x, img_y))
         if show_gradients:
@@ -3389,6 +3419,9 @@ def _render_master_banner_by_size(
             scale=image_scale,
             shift_x=int(image_shift_x),
             shift_y=int(image_shift_y),
+        )
+        img_x, img_y, img_w, img_h = _clamp_image_rect_to_canvas(
+            x=img_x, y=img_y, w=img_w, h=img_h, canvas_w=width, canvas_h=height
         )
         if bg_image is not None:
             canvas.paste(_resize_exact(bg_image, img_w, img_h).convert("RGBA"), (img_x, img_y))
