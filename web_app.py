@@ -2125,13 +2125,39 @@ def _prepare_image_for_uncrop(source_image_url: str, *, country: str = "") -> tu
         "input_height": height,
         "target_max_side": UNCROP_PREPROCESS_TARGET_MAX_SIDE,
         "upscaled": False,
+        "normalized": False,
         "scale_factor": "",
         "output_url": str(source_image_url or "").strip(),
         "output_width": width,
         "output_height": height,
     }
     if scale_factor is None:
-        return str(source_image_url or "").strip(), debug
+        if max(width, height) <= UNCROP_PREPROCESS_TARGET_MAX_SIDE:
+            return str(source_image_url or "").strip(), debug
+        source_hash = hashlib.sha256(raw).hexdigest()[:20]
+        bucket = _normalize_image_country_bucket(country, fallback="other")
+        file_name = f"normalized_{source_hash}_{UNCROP_PREPROCESS_TARGET_MAX_SIDE}.png"
+        target_dir = UPSCALE_DIR / bucket
+        target_dir.mkdir(parents=True, exist_ok=True)
+        file_path = target_dir / file_name
+        output_url = f"/output/upscaled/{bucket}/{file_name}"
+        if file_path.exists():
+            with Image.open(file_path) as cached_image:
+                out_width, out_height = cached_image.size
+        else:
+            with Image.open(BytesIO(raw)) as source_image:
+                normalized_image = _normalize_image_to_max_side(source_image, UNCROP_PREPROCESS_TARGET_MAX_SIDE)
+            normalized_image.save(file_path, format="PNG", optimize=True)
+            out_width, out_height = normalized_image.size
+        debug.update(
+            {
+                "normalized": True,
+                "output_url": output_url,
+                "output_width": out_width,
+                "output_height": out_height,
+            }
+        )
+        return output_url, debug
 
     source_hash = hashlib.sha256(raw).hexdigest()[:20]
     bucket = _normalize_image_country_bucket(country, fallback="other")
@@ -2152,6 +2178,7 @@ def _prepare_image_for_uncrop(source_image_url: str, *, country: str = "") -> tu
     debug.update(
         {
             "upscaled": True,
+            "normalized": True,
             "scale_factor": f"{scale_factor}x",
             "output_url": output_url,
             "output_width": out_width,
