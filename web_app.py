@@ -53,6 +53,7 @@ TEMP_GENERATED_DIR = EPHEMERAL_OUTPUT_ROOT / "generated"
 GENERATED_DIR = TEMP_GENERATED_DIR
 ZIP_DIR = EPHEMERAL_OUTPUT_ROOT / "archives"
 UNCROP_DIR = EPHEMERAL_OUTPUT_ROOT / "uncrop"
+UPSCALE_DIR = EPHEMERAL_OUTPUT_ROOT / "upscaled"
 VIDEO_DIR = EPHEMERAL_OUTPUT_ROOT / "videos"
 DEFAULT_PACKSHOT_VIDEO = ROOT / "assets" / "video" / "packshot.mp4"
 IMAGE_LIBRARY_FILE = PERSISTENT_OUTPUT_ROOT / "image_library.json"
@@ -64,6 +65,8 @@ UNCROP_TARGET_WIDTH = 3200
 UNCROP_TARGET_HEIGHT = 2472
 UNCROP_MIN_HORIZONTAL_MARGIN = 262
 UNCROP_MIN_VERTICAL_MARGIN = 202
+UNCROP_PREPROCESS_TARGET_MAX_SIDE = 1376
+MAGNIFIC_SCALE_FACTORS = (2, 4, 8, 16)
 THREE_D_ASPECT_RATIO = "4:3"
 THREE_D_STYLE_REFERENCE_PATHS = [
     ROOT / "assets" / "style-references" / "3d" / "safety-vest.jpeg",
@@ -390,6 +393,7 @@ def _ensure_output_directories() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ZIP_DIR.mkdir(parents=True, exist_ok=True)
     UNCROP_DIR.mkdir(parents=True, exist_ok=True)
+    UPSCALE_DIR.mkdir(parents=True, exist_ok=True)
     VIDEO_DIR.mkdir(parents=True, exist_ok=True)
     IMAGE_LIBRARY_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -756,6 +760,7 @@ def load_tokens_from_file() -> None:
                     "REPLICATE_API_TOKEN",
                     "REPLICATE_MODEL",
                     "CLIPDROP_API_KEY",
+                    "MAGNIFIC_API_KEY",
                 } and env_value:
                     os.environ.setdefault(env_key, env_value)
                 continue
@@ -2027,6 +2032,133 @@ def _calculate_uncrop_extents(
     up = vertical_extend // 2
     down = vertical_extend - up
     return left, right, up, down
+
+
+def _select_magnific_scale_factor(width: int, height: int, *, target_max_side: int = UNCROP_PREPROCESS_TARGET_MAX_SIDE) -> Optional[int]:
+    max_side = max(int(width or 0), int(height or 0))
+    if max_side <= 0 or max_side >= target_max_side:
+        return None
+    for factor in MAGNIFIC_SCALE_FACTORS:
+        if max_side * factor >= target_max_side:
+            return factor
+    return MAGNIFIC_SCALE_FACTORS[-1]
+
+
+def _normalize_image_to_max_side(image: Image.Image, target_max_side: int) -> Image.Image:
+    width, height = image.size
+    max_side = max(width, height)
+    if max_side <= 0 or max_side == target_max_side:
+        return image.convert("RGB")
+    scale = float(target_max_side) / float(max_side)
+    next_size = (
+        max(1, int(round(width * scale))),
+        max(1, int(round(height * scale))),
+    )
+    return image.convert("RGB").resize(next_size, Image.Resampling.LANCZOS)
+
+
+def _magnific_request_json(url: str, method: str, payload: Optional[dict] = None) -> dict:
+    api_key = os.getenv("MAGNIFIC_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("MAGNIFIC_API_KEY is not set")
+    data = None
+    headers = {"x-magnific-api-key": api_key}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"Magnific upscale failed: HTTP {exc.code} {detail}") from exc
+
+
+def _magnific_upscale_bytes(raw: bytes, *, scale_factor: int) -> bytes:
+    encoded = base64.b64encode(raw).decode("ascii")
+    payload = {
+        "image": encoded,
+        "scale_factor": f"{scale_factor}x",
+        "optimized_for": "films_n_photography",
+        "creativity": -2,
+        "hdr": 1,
+        "resemblance": 8,
+        "fractality": 0,
+        "engine": "automatic",
+        "filter_nsfw": False,
+    }
+    created = _magnific_request_json("https://api.magnific.com/v1/ai/image-upscaler", "POST", payload)
+    task_id = str((created.get("data") or {}).get("task_id") or "").strip()
+    if not task_id:
+        raise RuntimeError("Magnific upscale task id is missing")
+
+    timeout_seconds = int(os.getenv("MAGNIFIC_TIMEOUT_SECONDS", "300") or "300")
+    poll_interval = float(os.getenv("MAGNIFIC_POLL_INTERVAL_SECONDS", "5") or "5")
+    started = time.time()
+    while time.time() - started < timeout_seconds:
+        status_payload = _magnific_request_json(
+            f"https://api.magnific.com/v1/ai/image-upscaler/{task_id}",
+            "GET",
+        )
+        data = status_payload.get("data") or {}
+        status = str(data.get("status") or "").strip().upper()
+        generated = data.get("generated") or []
+        generated_url = str(generated[0] if generated else "").strip()
+        if generated_url:
+            return _download_remote_bytes(generated_url)
+        if status in {"FAILED", "ERROR", "CANCELED", "CANCELLED"}:
+            raise RuntimeError(f"Magnific upscale failed: {status}")
+        time.sleep(max(1.0, poll_interval))
+
+    raise RuntimeError("Magnific upscale timed out")
+
+
+def _prepare_image_for_uncrop(source_image_url: str, *, country: str = "") -> tuple[str, dict]:
+    raw = _read_image_bytes_from_url(source_image_url)
+    with Image.open(BytesIO(raw)) as source_image:
+        width, height = source_image.size
+    scale_factor = _select_magnific_scale_factor(width, height)
+    debug = {
+        "input_url": str(source_image_url or "").strip(),
+        "input_width": width,
+        "input_height": height,
+        "target_max_side": UNCROP_PREPROCESS_TARGET_MAX_SIDE,
+        "upscaled": False,
+        "scale_factor": "",
+        "output_url": str(source_image_url or "").strip(),
+        "output_width": width,
+        "output_height": height,
+    }
+    if scale_factor is None:
+        return str(source_image_url or "").strip(), debug
+
+    source_hash = hashlib.sha256(raw).hexdigest()[:20]
+    bucket = _normalize_image_country_bucket(country, fallback="other")
+    file_name = f"magnific_{source_hash}_{scale_factor}x_{UNCROP_PREPROCESS_TARGET_MAX_SIDE}.png"
+    target_dir = UPSCALE_DIR / bucket
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_path = target_dir / file_name
+    output_url = f"/output/upscaled/{bucket}/{file_name}"
+    if file_path.exists():
+        with Image.open(file_path) as cached_image:
+            out_width, out_height = cached_image.size
+    else:
+        upscaled_raw = _magnific_upscale_bytes(raw, scale_factor=scale_factor)
+        with Image.open(BytesIO(upscaled_raw)) as upscaled_image:
+            normalized_image = _normalize_image_to_max_side(upscaled_image, UNCROP_PREPROCESS_TARGET_MAX_SIDE)
+        normalized_image.save(file_path, format="PNG", optimize=True)
+        out_width, out_height = normalized_image.size
+    debug.update(
+        {
+            "upscaled": True,
+            "scale_factor": f"{scale_factor}x",
+            "output_url": output_url,
+            "output_width": out_width,
+            "output_height": out_height,
+        }
+    )
+    return output_url, debug
 
 
 def _is_cached_uncrop_current(image_url: str) -> bool:
@@ -3570,6 +3702,7 @@ def render_banner_images(
         "used_cache": False,
         "source_kind": "",
         "input_url": effective_image_url,
+        "preprocess": {},
         "output_url": "",
     }
     if image_url:
@@ -3590,12 +3723,18 @@ def render_banner_images(
             )
         uncrop_country = "uploaded" if source_kind == "uploaded" else (country or cached_country or "other")
         try:
-            if cached_banner_source_url and _is_cached_uncrop_current(cached_banner_source_url):
+            prepared_image_url, preprocess_debug = _prepare_image_for_uncrop(image_url, country=uncrop_country)
+            uncrop_debug["preprocess"] = preprocess_debug
+            if (
+                prepared_image_url == image_url
+                and cached_banner_source_url
+                and _is_cached_uncrop_current(cached_banner_source_url)
+            ):
                 effective_image_url = cached_banner_source_url
                 uncrop_debug["used_cache"] = True
             else:
                 uncrop_debug["attempted"] = True
-                effective_image_url = uncrop_image_with_clipdrop(image_url, country=uncrop_country)
+                effective_image_url = uncrop_image_with_clipdrop(prepared_image_url, country=uncrop_country)
                 update_image_library_banner_source(image_url, effective_image_url)
             uncrop_debug["output_url"] = effective_image_url
             source_image = _fetch_image_from_url(effective_image_url)
