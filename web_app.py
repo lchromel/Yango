@@ -60,11 +60,10 @@ IMAGE_LIBRARY_LOCK = threading.Lock()
 VIDEO_LIBRARY_FILE = EPHEMERAL_OUTPUT_ROOT / "video_library.json"
 VIDEO_LIBRARY_LOCK = threading.Lock()
 BRAND_LOGO_TEXT = "YANGO"
-UNCROP_TARGET_WIDTH = 4096
-UNCROP_TARGET_HEIGHT = 3200
-UNCROP_MIN_HORIZONTAL_MARGIN = 900
-UNCROP_MIN_VERTICAL_MARGIN = 600
-UNCROP_VERTICAL_UP_RATIO = 0.4
+UNCROP_TARGET_WIDTH = 3200
+UNCROP_TARGET_HEIGHT = 2472
+UNCROP_MIN_HORIZONTAL_MARGIN = 262
+UNCROP_MIN_VERTICAL_MARGIN = 202
 THREE_D_ASPECT_RATIO = "4:3"
 THREE_D_STYLE_REFERENCE_PATHS = [
     ROOT / "assets" / "style-references" / "3d" / "safety-vest.jpeg",
@@ -2025,7 +2024,7 @@ def _calculate_uncrop_extents(
     vertical_extend = target_height - height
     left = horizontal_extend // 2
     right = horizontal_extend - left
-    up = int(round(vertical_extend * UNCROP_VERTICAL_UP_RATIO))
+    up = vertical_extend // 2
     down = vertical_extend - up
     return left, right, up, down
 
