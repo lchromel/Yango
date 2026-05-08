@@ -1947,6 +1947,7 @@ async function uploadCustomImage(file) {
   });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || "Upload failed");
+  upsertStateLibraryImage(payload.library_image);
   return payload.image_local_url || "";
 }
 
@@ -2196,6 +2197,14 @@ async function createBanners() {
     state.renderedBanners = (payload.banners || []).filter((item) => item && item.url && item.size);
     state.hasRenderedBanners = state.renderedBanners.length > 0;
     upsertStateLibraryImage(payload.library_image);
+    if (payload.source_image_url && !payload.uncrop_warning) {
+      const selectedLibraryImage = findLibraryImageByUrl(state.bannerSourceImageUrl);
+      if (selectedLibraryImage) {
+        selectedLibraryImage.banner_source_url = String(payload.source_image_url || "").trim();
+        selectedLibraryImage.effective_banner_source_url = selectedLibraryImage.banner_source_url || selectedLibraryImage.image_url;
+        selectedLibraryImage.banner_ready = Boolean(selectedLibraryImage.banner_source_url);
+      }
+    }
     if (payload.uncrop_warning) {
       showError(payload.uncrop_warning, "The image expansion step failed, so the banners were rendered with the original image.");
     }

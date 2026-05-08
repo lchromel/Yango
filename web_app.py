@@ -3761,7 +3761,14 @@ class Handler(SimpleHTTPRequestHandler):
                     file_bytes = image_field.file.read()
                     file_name = str(getattr(image_field, "filename", "") or "").strip()
                     local_url = _save_uploaded_file_bytes(file_bytes, file_name)
-                    self._send_json(HTTPStatus.OK, {"image_local_url": local_url})
+                    library_image = _upsert_image_library_record(
+                        local_url,
+                        kind="uploaded",
+                        country="uploaded",
+                        original_name=file_name,
+                        label=Path(file_name).stem if file_name else "",
+                    )
+                    self._send_json(HTTPStatus.OK, {"image_local_url": local_url, "library_image": library_image})
                     return
 
             if self.path == "/api/upload-video":
@@ -3969,7 +3976,14 @@ class Handler(SimpleHTTPRequestHandler):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "imageData is required"})
                     return
                 local_url = _save_uploaded_data_url(image_data, file_name)
-                self._send_json(HTTPStatus.OK, {"image_local_url": local_url})
+                library_image = _upsert_image_library_record(
+                    local_url,
+                    kind="uploaded",
+                    country="uploaded",
+                    original_name=file_name,
+                    label=Path(file_name).stem if file_name else "",
+                )
+                self._send_json(HTTPStatus.OK, {"image_local_url": local_url, "library_image": library_image})
                 return
 
             if self.path == "/api/regenerate-image":
