@@ -3701,7 +3701,7 @@ def _transform_with_scale_and_shift(
     shift_x: int,
     shift_y: int,
 ) -> tuple[int, int, int, int]:
-    safe_scale = max(1.0, min(2.5, float(scale or 1.0)))
+    safe_scale = max(1.0, min(3.5, float(scale or 1.0)))
     sw = max(1, int(round(w * safe_scale)))
     sh = max(1, int(round(h * safe_scale)))
     cx = x + (w / 2.0)
@@ -5932,7 +5932,7 @@ class Handler(SimpleHTTPRequestHandler):
             logo_variant = str(body.get("logoVariant", "default")).strip() or "default"
             is_frame_layout = _is_frame_layout_variant(layout_type)
             default_image_scale = 1.25 if is_frame_layout else 1.0
-            image_scale_max = 2.5 if is_frame_layout else 1.5
+            image_scale_max = 3.5 if is_frame_layout else 1.5
             try:
                 image_scale = float(body.get("imageScale", default_image_scale) or default_image_scale)
             except (TypeError, ValueError):
