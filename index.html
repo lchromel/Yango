@@ -16,7 +16,7 @@
         <div class="tab-row" role="tablist" aria-label="Builder tabs">
           <button id="tabImage" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Image</button>
           <button id="tabBanner" class="tab-btn" type="button" role="tab" aria-selected="false">Banners</button>
-          <button id="tabVideo" class="tab-btn" type="button" role="tab" aria-selected="false" aria-disabled="true" disabled title="Video generation is temporarily unavailable">Video</button>
+          <button id="tabVideo" class="tab-btn" type="button" role="tab" aria-selected="false">Video</button>
         </div>
 
         <div id="imageTabPanel" class="tab-panel is-active" role="tabpanel">
@@ -60,6 +60,70 @@
                 </button>
               </div>
               <input id="editUploadImageInput" class="file-input-hidden" type="file" accept="image/png,image/jpeg,image/webp" />
+            </section>
+
+            <section class="section select-section drive-style-only hidden">
+              <p class="field-label">Drive Country:</p>
+              <div class="select-wrap">
+                <button id="driveCountryToggle" class="select-toggle" type="button" aria-expanded="false">
+                  <span id="driveCountryDisplay" class="select-display">Select a country</span>
+                  <img
+                    id="driveCountryChevronIcon"
+                    class="select-chevron-icon"
+                    src="./assets/icons/ChevronDownM.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+                <div id="driveCountryMenu" class="select-menu hidden"></div>
+              </div>
+            </section>
+
+            <section class="section select-section drive-style-only hidden">
+              <p class="field-label">City:</p>
+              <div class="select-wrap">
+                <button id="driveCityToggle" class="select-toggle" type="button" aria-expanded="false">
+                  <span id="driveCityDisplay" class="select-display">Select a city</span>
+                  <img
+                    id="driveCityChevronIcon"
+                    class="select-chevron-icon"
+                    src="./assets/icons/ChevronDownM.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+                <div id="driveCityMenu" class="select-menu hidden"></div>
+              </div>
+            </section>
+
+            <section class="section select-section drive-style-only hidden">
+              <p class="field-label">Car Model:</p>
+              <div class="select-wrap">
+                <button id="carModelToggle" class="select-toggle" type="button" aria-expanded="false">
+                  <span id="carModelDisplay" class="select-display">Select a car model</span>
+                  <img
+                    id="carModelChevronIcon"
+                    class="select-chevron-icon"
+                    src="./assets/icons/ChevronDownM.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+                <div id="carModelMenu" class="select-menu hidden"></div>
+                <div id="carModelCustomWrap" class="car-model-custom hidden">
+                  <input id="carModelCustomInput" class="text-input" type="text" value="" placeholder="Nissan Patrol" />
+                </div>
+              </div>
+            </section>
+
+            <section class="section drive-style-only hidden">
+              <p class="field-label">Color: <span id="colorName" class="field-label-muted">White</span></p>
+              <div class="color-row" id="presetColors"></div>
+            </section>
+
+            <section class="section drive-style-only hidden">
+              <p class="field-label">Angle</p>
+              <div id="angleRow" class="angle-row"></div>
             </section>
 
             <section class="section select-section photo-style-only">
@@ -187,6 +251,11 @@
             </section>
 
             <section class="section">
+              <p class="field-label">Brand:</p>
+              <div id="bannerBrandRow" class="angle-row"></div>
+            </section>
+
+            <section class="section">
               <p class="field-label">Image Position:</p>
               <div class="shift-scope-row">
                 <span id="imageShiftScope" class="shift-scope-label">Global</span>
@@ -248,6 +317,11 @@
             </section>
 
             <section class="section">
+              <p class="field-label">Brand:</p>
+              <div id="videoBrandRow" class="angle-row"></div>
+            </section>
+
+            <section class="section">
               <p class="field-label">Video Result:</p>
               <p id="videoRenderStatus" class="video-helper-text">No video yet.</p>
             </section>
@@ -301,6 +375,7 @@
         </div>
 
         <input id="bannerAccentColorInput" type="color" value="#E3FF74" hidden />
+        <input id="customColorInput" type="color" value="#97a56e" hidden />
       </aside>
 
       <section class="canvas">

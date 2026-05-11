@@ -4,8 +4,61 @@ const IMAGE_STYLES = [
   { label: "Photo", value: "photo" },
   { label: "3D", value: "3d" },
   { label: "Edit", value: "edit" },
+  { label: "Yango Drive", value: "yango-drive" },
 ];
 const IMAGE_REQUEST_TIMEOUT_MS = 8 * 60 * 1000;
+const DRIVE_COUNTRY_CITY_OPTIONS = [
+  { country: "Kazakhstan", cities: ["Astana", "Almaty"] },
+  { country: "Georgia", cities: ["Tbilisi", "Batumi"] },
+  { country: "Serbia", cities: ["Belgrade"] },
+  { country: "Belarus", cities: ["Minsk"] },
+  { country: "Turkey", cities: ["Antalya", "Ankara", "Izmir", "Istanbul"] },
+];
+const CUSTOM_CAR_OPTION = "__custom__";
+const TOP_RENTAL_CARS_DUBAI = [
+  "Nissan Patrol",
+  "Toyota Land Cruiser Prado",
+  "Toyota Land Cruiser",
+  "Nissan Sunny",
+  "Nissan Altima",
+  "Nissan X-Trail",
+  "Toyota Camry",
+  "Kia Sportage",
+  "Hyundai Creta",
+  "Mitsubishi Pajero",
+  "Range Rover Sport",
+  "Mercedes-Benz G63 AMG",
+  "Mercedes-Benz C200",
+  "BMW 5 Series",
+  "BMW M4",
+  "Porsche 911",
+  "Porsche Cayenne",
+  "Ford Mustang",
+  "Chevrolet Camaro",
+  "Lamborghini Huracan",
+];
+const PRESET_COLORS = [
+  { label: "Black", hex: "#000000" },
+  { label: "White", hex: "#e5e5e5" },
+  { label: "Silver", hex: "#bdbdbd" },
+  { label: "Dark Silver", hex: "#98a3bd" },
+  { label: "Red", hex: "#c40606" },
+  { label: "Custom", hex: "#97a56e", custom: true },
+];
+const ANGLE_PRESETS = [
+  { label: "Front 3/4" },
+  { label: "Rear 3/4" },
+  { label: "Front 3/4 Low Angle" },
+  { label: "Rear 3/4 Low Angle" },
+  { label: "Clean Side Profile" },
+  { label: "Centered Front Shot" },
+  { label: "Rear Light Hero Shot" },
+  { label: "Dynamic Tracking Shot" },
+];
+const BRAND_OPTIONS = [
+  { label: "Yango", value: "yango" },
+  { label: "Yango Drive", value: "yango-drive" },
+];
 const EDIT_CLEANUP_PROMPT = [
   "убери текстовый блок, логотип и дисклеймер обрежь все лишнее чтобы суть была крупно по центру изображения и заполняло все пространство",
 ].join(" ");
@@ -96,7 +149,7 @@ const IMAGE_SCALE_STEP = 3;
 const BANNER_AUTO_RENDER_DEBOUNCE_MS = 550;
 const CUSTOM_ACCENT_TRIGGER_WINDOW_MS = 550;
 const CUSTOM_ACCENT_TRIGGER_TAP_COUNT = 3;
-const VIDEO_TAB_ENABLED = false;
+const VIDEO_TAB_ENABLED = true;
 const ACCENT_PRESET_VALUES = {
   lime: "#E3FF74",
   red: "#FF1A1A",
@@ -108,6 +161,17 @@ const state = {
   vehicleDataError: "",
   selectedImageStyle: "photo",
   styleMenuOpen: false,
+  driveCountry: "",
+  driveCity: "",
+  driveCountryMenuOpen: false,
+  driveCityMenuOpen: false,
+  selectedCarModel: "",
+  customCarModel: "",
+  carMenuOpen: false,
+  colorHex: "#e5e5e5",
+  colorLabel: "White",
+  selectedPreset: "White",
+  selectedAngle: "Front 3/4",
   selectedCountry: "",
   selectedTransportLabel: "",
   countryMenuOpen: false,
@@ -143,6 +207,8 @@ const state = {
   activeTab: "image",
   sourceLibraryOpen: false,
   bannerLayout: "photo",
+  bannerBrand: "yango",
+  videoBrand: "yango-drive",
   bannerAccentPreset: "lime",
   bannerAccentCustomColor: ACCENT_PRESET_VALUES.lime,
   bannerTextSets: [
@@ -279,6 +345,24 @@ const styleToggleEl = document.getElementById("styleToggle");
 const styleDisplayEl = document.getElementById("styleDisplay");
 const styleChevronIconEl = document.getElementById("styleChevronIcon");
 const styleMenuEl = document.getElementById("styleMenu");
+const driveCountryToggleEl = document.getElementById("driveCountryToggle");
+const driveCountryDisplayEl = document.getElementById("driveCountryDisplay");
+const driveCountryChevronIconEl = document.getElementById("driveCountryChevronIcon");
+const driveCountryMenuEl = document.getElementById("driveCountryMenu");
+const driveCityToggleEl = document.getElementById("driveCityToggle");
+const driveCityDisplayEl = document.getElementById("driveCityDisplay");
+const driveCityChevronIconEl = document.getElementById("driveCityChevronIcon");
+const driveCityMenuEl = document.getElementById("driveCityMenu");
+const carModelToggleEl = document.getElementById("carModelToggle");
+const carModelDisplayEl = document.getElementById("carModelDisplay");
+const carModelChevronIconEl = document.getElementById("carModelChevronIcon");
+const carModelMenuEl = document.getElementById("carModelMenu");
+const carModelCustomWrapEl = document.getElementById("carModelCustomWrap");
+const carModelCustomInputEl = document.getElementById("carModelCustomInput");
+const colorNameEl = document.getElementById("colorName");
+const presetColorsEl = document.getElementById("presetColors");
+const angleRowEl = document.getElementById("angleRow");
+const customColorInput = document.getElementById("customColorInput");
 const transportToggleEl = document.getElementById("transportToggle");
 const transportDisplayEl = document.getElementById("transportDisplay");
 const transportChevronIconEl = document.getElementById("transportChevronIcon");
@@ -298,6 +382,7 @@ const situationDescriptionLabelEl = document.getElementById("situationDescriptio
 const bannerAccentColorInput = document.getElementById("bannerAccentColorInput");
 const generateBtn = document.getElementById("generateBtn");
 const photoStyleOnlyEls = Array.from(document.querySelectorAll(".photo-style-only"));
+const driveStyleOnlyEls = Array.from(document.querySelectorAll(".drive-style-only"));
 const editSourceSectionEl = document.getElementById("editSourceSection");
 const editUploadImageBtnEl = document.getElementById("editUploadImageBtn");
 const editUploadImageInputEl = document.getElementById("editUploadImageInput");
@@ -331,6 +416,8 @@ const sourceLibraryEl = document.getElementById("sourceLibrary");
 const sourceLibraryToggleEl = document.getElementById("sourceLibraryToggle");
 const sourceLibraryChevronEl = document.getElementById("sourceLibraryChevron");
 const layoutTypeRowEl = document.getElementById("layoutTypeRow");
+const bannerBrandRowEl = document.getElementById("bannerBrandRow");
+const videoBrandRowEl = document.getElementById("videoBrandRow");
 const imageScaleEl = document.getElementById("imageScale");
 const imageShiftXEl = document.getElementById("imageShiftX");
 const imageShiftYEl = document.getElementById("imageShiftY");
@@ -497,7 +584,29 @@ function setSourceStatusForImage(record) {
   setSourceStatus(state.imageUrl ? "generated" : "none");
 }
 
+function isDriveStyle() {
+  return state.selectedImageStyle === "yango-drive";
+}
+
+function getSelectedDriveCountryRecord() {
+  return DRIVE_COUNTRY_CITY_OPTIONS.find((item) => item.country === state.driveCountry) || null;
+}
+
+function getDriveCityOptions() {
+  return getSelectedDriveCountryRecord()?.cities || [];
+}
+
+function getDriveCarModel() {
+  if (state.selectedCarModel === CUSTOM_CAR_OPTION) {
+    return state.customCarModel.trim();
+  }
+  return state.selectedCarModel.trim();
+}
+
 function getCurrentCarModel() {
+  if (isDriveStyle() || state.activeTab === "video") {
+    return getDriveCarModel();
+  }
   return getSelectedTransport()?.model?.trim() || "";
 }
 
@@ -1047,6 +1156,163 @@ function renderStyleControl() {
   });
 }
 
+function renderDriveCountryControl() {
+  if (!driveCountryDisplayEl || !driveCountryToggleEl || !driveCountryMenuEl) return;
+  driveCountryDisplayEl.textContent = state.driveCountry || "Select a country";
+  driveCountryToggleEl.setAttribute("aria-expanded", state.driveCountryMenuOpen ? "true" : "false");
+  if (driveCountryChevronIconEl) {
+    driveCountryChevronIconEl.src = state.driveCountryMenuOpen
+      ? "./assets/icons/ChevronUpM.svg"
+      : "./assets/icons/ChevronDownM.svg";
+  }
+  driveCountryMenuEl.classList.toggle("hidden", !state.driveCountryMenuOpen);
+  driveCountryMenuEl.innerHTML = "";
+  DRIVE_COUNTRY_CITY_OPTIONS.forEach((item) => {
+    renderSelectOption(
+      driveCountryMenuEl,
+      { label: item.country },
+      state.driveCountry === item.country,
+      () => {
+        state.driveCountry = item.country;
+        state.driveCity = item.cities[0] || "";
+        state.driveCountryMenuOpen = false;
+        state.driveCityMenuOpen = false;
+        renderImageControls();
+        renderUiState();
+      }
+    );
+  });
+}
+
+function renderDriveCityControl() {
+  if (!driveCityDisplayEl || !driveCityToggleEl || !driveCityMenuEl) return;
+  const cities = getDriveCityOptions();
+  driveCityDisplayEl.textContent = state.driveCity || (state.driveCountry ? "Select a city" : "Select a country first");
+  driveCityToggleEl.disabled = !state.driveCountry;
+  driveCityToggleEl.setAttribute("aria-expanded", state.driveCityMenuOpen ? "true" : "false");
+  if (driveCityChevronIconEl) {
+    driveCityChevronIconEl.src = state.driveCityMenuOpen
+      ? "./assets/icons/ChevronUpM.svg"
+      : "./assets/icons/ChevronDownM.svg";
+  }
+  driveCityMenuEl.classList.toggle("hidden", !state.driveCityMenuOpen);
+  driveCityMenuEl.innerHTML = "";
+  cities.forEach((city) => {
+    renderSelectOption(
+      driveCityMenuEl,
+      { label: city },
+      state.driveCity === city,
+      () => {
+        state.driveCity = city;
+        state.driveCityMenuOpen = false;
+        renderImageControls();
+        renderUiState();
+      }
+    );
+  });
+}
+
+function renderCarModelControl() {
+  if (!carModelDisplayEl || !carModelToggleEl || !carModelMenuEl || !carModelCustomWrapEl) return;
+  const selectedLabel =
+    state.selectedCarModel === CUSTOM_CAR_OPTION
+      ? "Enter your own"
+      : state.selectedCarModel || "Select a car model";
+  carModelDisplayEl.textContent = selectedLabel;
+  carModelToggleEl.setAttribute("aria-expanded", state.carMenuOpen ? "true" : "false");
+  if (carModelChevronIconEl) {
+    carModelChevronIconEl.src = state.carMenuOpen
+      ? "./assets/icons/ChevronUpM.svg"
+      : "./assets/icons/ChevronDownM.svg";
+  }
+  carModelMenuEl.classList.toggle("hidden", !state.carMenuOpen);
+  carModelCustomWrapEl.classList.toggle("hidden", state.selectedCarModel !== CUSTOM_CAR_OPTION);
+  if (state.selectedCarModel === CUSTOM_CAR_OPTION && carModelCustomInputEl) {
+    carModelCustomInputEl.value = state.customCarModel;
+  }
+
+  carModelMenuEl.innerHTML = "";
+  const items = [
+    { label: "Enter your own", value: CUSTOM_CAR_OPTION },
+    ...TOP_RENTAL_CARS_DUBAI.map((model) => ({ label: model, value: model })),
+  ];
+  items.forEach((item) => {
+    renderSelectOption(
+      carModelMenuEl,
+      { label: item.label },
+      state.selectedCarModel === item.value,
+      () => {
+        state.selectedCarModel = item.value;
+        state.carMenuOpen = false;
+        renderCarModelControl();
+        renderUiState();
+        if (item.value === CUSTOM_CAR_OPTION && carModelCustomInputEl) {
+          setTimeout(() => carModelCustomInputEl.focus(), 0);
+        }
+      }
+    );
+  });
+}
+
+function renderColors() {
+  if (!presetColorsEl) return;
+  presetColorsEl.innerHTML = "";
+  if (colorNameEl) {
+    colorNameEl.textContent = state.colorLabel;
+  }
+  PRESET_COLORS.forEach((preset) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "swatch";
+    if (preset.custom) btn.classList.add("is-picker");
+    if (state.selectedPreset === preset.label) btn.classList.add("is-active");
+
+    const core = document.createElement("div");
+    core.className = "swatch-core";
+    if (!preset.custom) {
+      core.style.background = preset.hex;
+    }
+    btn.appendChild(core);
+    if (preset.custom) {
+      const glyph = document.createElement("span");
+      glyph.className = "swatch-picker-glyph";
+      glyph.textContent = "⌄";
+      btn.appendChild(glyph);
+    }
+
+    btn.addEventListener("click", () => {
+      if (preset.custom) {
+        customColorInput?.click();
+        return;
+      }
+      state.colorHex = preset.hex;
+      state.colorLabel = preset.label;
+      state.selectedPreset = preset.label;
+      renderColors();
+      renderUiState();
+    });
+
+    presetColorsEl.appendChild(btn);
+  });
+}
+
+function renderAngles() {
+  if (!angleRowEl) return;
+  angleRowEl.innerHTML = "";
+  ANGLE_PRESETS.forEach((preset) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "angle-chip";
+    chip.textContent = preset.label;
+    if (state.selectedAngle === preset.label) chip.classList.add("is-active");
+    chip.addEventListener("click", () => {
+      state.selectedAngle = preset.label;
+      renderAngles();
+    });
+    angleRowEl.appendChild(chip);
+  });
+}
+
 function renderTransportControl() {
   if (!transportDisplayEl || !transportToggleEl || !transportMenuEl) return;
   const selected = getSelectedTransport();
@@ -1144,6 +1410,7 @@ function renderUiState() {
   const isBusy = state.generating || state.bannerRendering || state.videoGenerating || state.videoRendering;
   const isEditStyle = state.selectedImageStyle === "edit";
   const is3dStyle = state.selectedImageStyle === "3d";
+  const isYangoDriveStyle = isDriveStyle();
   loaderEl.classList.toggle("hidden", !isBusy);
   if (loaderLabelEl) {
     if (state.generating) {
@@ -1166,12 +1433,14 @@ function renderUiState() {
       ? !state.editSourceImageUrl
       : is3dStyle
         ? !state.situationDescription.trim()
-        : (!state.selectedCountry || !getSelectedTransport()));
+        : isYangoDriveStyle
+          ? (!state.driveCountry || !state.driveCity || !getDriveCarModel())
+          : (!state.selectedCountry || !getSelectedTransport()));
   renderBannersBtn.disabled = state.bannerRendering || !state.bannerSourceImageUrl;
   if (generateVideoBtnEl) {
     const selectedSavedVideo = findLibraryVideoByUrl(state.videoResultUrl);
     const canRemixSavedVideo = Boolean(selectedSavedVideo);
-    const canGenerateNewVideo = Boolean(state.imageUrl && getCurrentCarModel());
+    const canGenerateNewVideo = Boolean(state.imageUrl && getDriveCarModel());
     generateVideoBtnEl.disabled = state.videoGenerating || state.videoRendering || !(canRemixSavedVideo || canGenerateNewVideo);
     generateVideoBtnEl.textContent = state.videoRendering ? "Generating Video..." : "Generate Video";
   }
@@ -1240,6 +1509,8 @@ function renderUiState() {
   renderSelectedSource();
   renderSourceLibrary();
   renderVideoLibrary();
+  renderBannerBrandSelector();
+  renderVideoBrandSelector();
 }
 
 function pushImageToHistory(url) {
@@ -1279,12 +1550,16 @@ function renderCompositions() {
 function renderImageControls() {
   const isEditStyle = state.selectedImageStyle === "edit";
   const is3dStyle = state.selectedImageStyle === "3d";
+  const isYangoDriveStyle = isDriveStyle();
   renderStyleControl();
   photoStyleOnlyEls.forEach((element) => {
-    element.classList.toggle("hidden", isEditStyle || is3dStyle);
+    element.classList.toggle("hidden", isEditStyle || is3dStyle || isYangoDriveStyle);
+  });
+  driveStyleOnlyEls.forEach((element) => {
+    element.classList.toggle("hidden", !isYangoDriveStyle);
   });
   if (situationDescriptionSectionEl) {
-    situationDescriptionSectionEl.classList.toggle("hidden", isEditStyle);
+    situationDescriptionSectionEl.classList.toggle("hidden", isEditStyle || isYangoDriveStyle);
   }
   if (situationDescriptionLabelEl) {
     situationDescriptionLabelEl.textContent = is3dStyle ? "Description" : "Situation";
@@ -1294,13 +1569,37 @@ function renderImageControls() {
       ? "Describe the 3D object you want"
       : "Describe what you want";
   }
-  if (isEditStyle || is3dStyle) {
+  if (isYangoDriveStyle) {
     state.countryMenuOpen = false;
     state.transportMenuOpen = false;
     if (countryMenuEl) countryMenuEl.classList.add("hidden");
     if (transportMenuEl) transportMenuEl.classList.add("hidden");
+    renderDriveCountryControl();
+    renderDriveCityControl();
+    renderCarModelControl();
+    renderColors();
+    renderAngles();
     return;
   }
+  if (isEditStyle || is3dStyle) {
+    state.countryMenuOpen = false;
+    state.transportMenuOpen = false;
+    state.driveCountryMenuOpen = false;
+    state.driveCityMenuOpen = false;
+    state.carMenuOpen = false;
+    if (countryMenuEl) countryMenuEl.classList.add("hidden");
+    if (transportMenuEl) transportMenuEl.classList.add("hidden");
+    if (driveCountryMenuEl) driveCountryMenuEl.classList.add("hidden");
+    if (driveCityMenuEl) driveCityMenuEl.classList.add("hidden");
+    if (carModelMenuEl) carModelMenuEl.classList.add("hidden");
+    return;
+  }
+  state.driveCountryMenuOpen = false;
+  state.driveCityMenuOpen = false;
+  state.carMenuOpen = false;
+  if (driveCountryMenuEl) driveCountryMenuEl.classList.add("hidden");
+  if (driveCityMenuEl) driveCityMenuEl.classList.add("hidden");
+  if (carModelMenuEl) carModelMenuEl.classList.add("hidden");
   renderCountryControl();
   renderTransportControl();
   renderCompositions();
@@ -1375,6 +1674,53 @@ function renderLayoutTypes() {
   row.appendChild(layoutGroup);
   row.appendChild(accentGroup);
   layoutTypeRowEl.appendChild(row);
+}
+
+function renderBrandSelector(rowEl, selectedBrand, onSelect, options = {}) {
+  if (!rowEl) return;
+  const { yangoDisabled = false } = options;
+  rowEl.innerHTML = "";
+  BRAND_OPTIONS.forEach((brand) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "angle-chip";
+    chip.textContent = brand.label;
+    if (selectedBrand === brand.value) chip.classList.add("is-active");
+    if (brand.value === "yango" && yangoDisabled) {
+      chip.disabled = true;
+      chip.classList.add("is-disabled");
+    }
+    chip.addEventListener("click", () => {
+      if (chip.disabled) return;
+      onSelect(brand.value);
+    });
+    rowEl.appendChild(chip);
+  });
+}
+
+function renderBannerBrandSelector() {
+  renderBrandSelector(bannerBrandRowEl, state.bannerBrand, (value) => {
+    state.bannerBrand = value;
+    invalidateRenderedBanners();
+    renderBannerBrandSelector();
+    renderBannerSetsView();
+    renderTopAction();
+  });
+}
+
+function renderVideoBrandSelector() {
+  renderBrandSelector(
+    videoBrandRowEl,
+    state.videoBrand,
+    (value) => {
+      state.videoBrand = value;
+      state.videoPromptText = "";
+      state.videoRenderStatus = "No video yet.";
+      renderVideoBrandSelector();
+      renderUiState();
+    },
+    { yangoDisabled: true }
+  );
 }
 
 function renderShiftControls() {
@@ -1976,19 +2322,32 @@ async function generatePrompt() {
 
   const selectedTransport = getSelectedTransport();
   const is3dStyle = state.selectedImageStyle === "3d";
+  const isYangoDriveStyle = isDriveStyle();
   if (is3dStyle && !state.situationDescription.trim()) {
     alert("DESCRIBE WHAT TO GENERATE");
     return;
   }
-  if (!is3dStyle && !state.selectedCountry) {
+  if (isYangoDriveStyle && !state.driveCountry) {
     alert("PLEASE SELECT COUNTRY");
     return;
   }
-  if (!is3dStyle && !selectedTransport) {
+  if (isYangoDriveStyle && !state.driveCity) {
+    alert("PLEASE SELECT CITY");
+    return;
+  }
+  if (isYangoDriveStyle && !getDriveCarModel()) {
+    alert("PLEASE SELECT CAR MODEL");
+    return;
+  }
+  if (!is3dStyle && !isYangoDriveStyle && !state.selectedCountry) {
+    alert("PLEASE SELECT COUNTRY");
+    return;
+  }
+  if (!is3dStyle && !isYangoDriveStyle && !selectedTransport) {
     alert("PLEASE SELECT VEHICLE");
     return;
   }
-  const currentCarModel = selectedTransport?.model || "";
+  const currentCarModel = isYangoDriveStyle ? getDriveCarModel() : selectedTransport?.model || "";
 
   const previousImageUrl = state.imageUrl;
   state.generating = true;
@@ -2011,13 +2370,16 @@ async function generatePrompt() {
       body: JSON.stringify({
         service: IMAGE_SERVICE,
         style: getSelectedImageStyle().label,
-        country: state.selectedCountry,
+        country: isYangoDriveStyle ? state.driveCountry : state.selectedCountry,
+        city: isYangoDriveStyle ? state.driveCity : "",
         transportLabel: selectedTransport?.label || "",
         transportCode: selectedTransport?.tariffCode || "",
         basicClass: selectedTransport?.basicClass || "",
-        vehicleModel: selectedTransport?.model || "",
+        vehicleModel: currentCarModel,
         vehicleType: selectedTransport?.vehicleType || "",
-        colorName: selectedTransport?.colorName || "",
+        colorName: isYangoDriveStyle ? state.colorLabel : selectedTransport?.colorName || "",
+        colorHex: isYangoDriveStyle ? state.colorHex : "",
+        preferredAngle: isYangoDriveStyle ? state.selectedAngle : "",
         composition: state.selectedComposition,
         modelDescription: state.heroDescription,
         faceReferenceImageUrl: state.faceReferenceImageUrl,
@@ -2030,6 +2392,12 @@ async function generatePrompt() {
 
     state.imageUrl = payload.image_local_url || payload.image_url || "";
     state.bannerSourceImageUrl = state.imageUrl;
+    if (isYangoDriveStyle) {
+      state.bannerBrand = "yango-drive";
+      state.videoBrand = "yango-drive";
+    } else {
+      state.bannerBrand = "yango";
+    }
     state.basePromptText = payload.prompt || "";
     state.editPromptText = "";
     if (!state.imageUrl) throw new Error("No image returned");
@@ -2116,7 +2484,7 @@ function buildRenderPayload() {
   return {
     imageUrl: state.bannerSourceImageUrl,
     bannerSourceUrl: selectedLibraryImage?.banner_source_url || "",
-    country: state.selectedCountry,
+    country: isDriveStyle() ? state.driveCountry : state.selectedCountry,
     imageScale: (Number(state.imageScalePercent) || 100) / 100,
     imageShiftX: stepToShiftPx(Number(state.imageShiftXStep) || 0),
     // UX rule: moving Y slider right should move image up.
@@ -2135,6 +2503,7 @@ function buildRenderPayload() {
       badgeShiftY: Math.max(0, Math.min(100, Number(set.badgeShiftY) || 0)),
     })),
     layoutType: state.bannerLayout,
+    brand: state.bannerBrand,
     sizes: ["1200x1200", "1200x1350", "1200x628", "1080x1920"],
     bannerImageOverrides,
   };
@@ -2223,7 +2592,7 @@ async function createBanners() {
 }
 
 async function generateVideoPrompt() {
-  const currentCarModel = getCurrentCarModel();
+  const currentCarModel = getDriveCarModel();
   if (!state.imageUrl) {
     alert("GENERATE OR UPLOAD IMAGE FIRST");
     return;
@@ -2244,8 +2613,9 @@ async function generateVideoPrompt() {
       body: JSON.stringify({
         imageUrl: state.imageUrl,
         carModel: currentCarModel,
-        colorName: "",
+        colorName: state.colorLabel,
         basePrompt: state.basePromptText,
+        brand: state.videoBrand,
       }),
     });
     const payload = await response.json();
@@ -2270,7 +2640,7 @@ async function ensureVideoPromptReady() {
 }
 
 async function generateVideoFromPrompt() {
-  const currentCarModel = getCurrentCarModel();
+  const currentCarModel = getDriveCarModel();
   const selectedSavedVideo = findLibraryVideoByUrl(state.videoResultUrl);
   if (selectedSavedVideo) {
     state.videoRendering = true;
@@ -2282,9 +2652,10 @@ async function generateVideoFromPrompt() {
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          videoUrl: selectedSavedVideo.video_url,
-          headlines: state.videoHeadlines,
-        }),
+        videoUrl: selectedSavedVideo.video_url,
+        headlines: state.videoHeadlines,
+        brand: state.videoBrand,
+      }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Video remix failed");
@@ -2336,6 +2707,7 @@ async function generateVideoFromPrompt() {
         imageUrl: state.imageUrl,
         prompt,
         headlines: state.videoHeadlines,
+        brand: state.videoBrand,
       }),
     });
     const payload = await response.json();
@@ -2386,14 +2758,51 @@ countryToggleEl.addEventListener("click", () => {
   state.countryMenuOpen = !state.countryMenuOpen;
   state.transportMenuOpen = false;
   state.styleMenuOpen = false;
+  state.driveCountryMenuOpen = false;
+  state.driveCityMenuOpen = false;
+  state.carMenuOpen = false;
   renderImageControls();
 });
+
+if (driveCountryToggleEl) {
+  driveCountryToggleEl.addEventListener("click", () => {
+    state.driveCountryMenuOpen = !state.driveCountryMenuOpen;
+    state.driveCityMenuOpen = false;
+    state.carMenuOpen = false;
+    state.styleMenuOpen = false;
+    renderImageControls();
+  });
+}
+
+if (driveCityToggleEl) {
+  driveCityToggleEl.addEventListener("click", () => {
+    if (!state.driveCountry) return;
+    state.driveCityMenuOpen = !state.driveCityMenuOpen;
+    state.driveCountryMenuOpen = false;
+    state.carMenuOpen = false;
+    state.styleMenuOpen = false;
+    renderImageControls();
+  });
+}
+
+if (carModelToggleEl) {
+  carModelToggleEl.addEventListener("click", () => {
+    state.carMenuOpen = !state.carMenuOpen;
+    state.driveCountryMenuOpen = false;
+    state.driveCityMenuOpen = false;
+    state.styleMenuOpen = false;
+    renderImageControls();
+  });
+}
 
 if (styleToggleEl) {
   styleToggleEl.addEventListener("click", () => {
     state.styleMenuOpen = !state.styleMenuOpen;
     state.countryMenuOpen = false;
     state.transportMenuOpen = false;
+    state.driveCountryMenuOpen = false;
+    state.driveCityMenuOpen = false;
+    state.carMenuOpen = false;
     renderImageControls();
   });
 }
@@ -2403,6 +2812,9 @@ transportToggleEl.addEventListener("click", () => {
   state.transportMenuOpen = !state.transportMenuOpen;
   state.countryMenuOpen = false;
   state.styleMenuOpen = false;
+  state.driveCountryMenuOpen = false;
+  state.driveCityMenuOpen = false;
+  state.carMenuOpen = false;
   renderImageControls();
 });
 
@@ -2415,20 +2827,54 @@ document.addEventListener("click", (event) => {
       countryMenuEl.contains(target) ||
       styleToggleEl?.contains(target) ||
       styleMenuEl?.contains(target) ||
+      driveCountryToggleEl?.contains(target) ||
+      driveCountryMenuEl?.contains(target) ||
+      driveCityToggleEl?.contains(target) ||
+      driveCityMenuEl?.contains(target) ||
+      carModelToggleEl?.contains(target) ||
+      carModelMenuEl?.contains(target) ||
+      carModelCustomWrapEl?.contains(target) ||
       transportToggleEl.contains(target) ||
       transportMenuEl.contains(target))
   ) {
     return;
   }
-  if (state.countryMenuOpen || state.transportMenuOpen || state.styleMenuOpen || state.sourceLibraryCountryMenuOpen) {
+  if (
+    state.countryMenuOpen ||
+    state.transportMenuOpen ||
+    state.styleMenuOpen ||
+    state.driveCountryMenuOpen ||
+    state.driveCityMenuOpen ||
+    state.carMenuOpen ||
+    state.sourceLibraryCountryMenuOpen
+  ) {
     state.countryMenuOpen = false;
     state.transportMenuOpen = false;
     state.styleMenuOpen = false;
+    state.driveCountryMenuOpen = false;
+    state.driveCityMenuOpen = false;
+    state.carMenuOpen = false;
     state.sourceLibraryCountryMenuOpen = false;
     renderImageControls();
     renderSourceLibrary();
   }
 });
+
+if (carModelCustomInputEl) {
+  carModelCustomInputEl.addEventListener("input", (event) => {
+    state.customCarModel = event.target.value;
+    renderUiState();
+  });
+}
+
+if (customColorInput) {
+  customColorInput.addEventListener("input", (event) => {
+    state.colorHex = event.target.value;
+    state.colorLabel = "Custom";
+    state.selectedPreset = "Custom";
+    renderColors();
+  });
+}
 
 heroDescriptionInputEl.addEventListener("input", (event) => {
   state.heroDescription = event.target.value;

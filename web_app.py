@@ -61,6 +61,10 @@ IMAGE_LIBRARY_LOCK = threading.Lock()
 VIDEO_LIBRARY_FILE = EPHEMERAL_OUTPUT_ROOT / "video_library.json"
 VIDEO_LIBRARY_LOCK = threading.Lock()
 BRAND_LOGO_TEXT = "YANGO"
+BRAND_LOGO_TEXT_BY_KEY = {
+    "yango": "YANGO",
+    "yango-drive": "YANGO DRIVE",
+}
 UNCROP_TARGET_WIDTH = 3200
 UNCROP_TARGET_HEIGHT = 2472
 UNCROP_MIN_HORIZONTAL_MARGIN = 262
@@ -759,6 +763,9 @@ def load_tokens_from_file() -> None:
                     "KLING_SECRET_KEY",
                     "REPLICATE_API_TOKEN",
                     "REPLICATE_MODEL",
+                    "RECRAFT_API_TOKEN",
+                    "RECRAFT_API_KEY",
+                    "RECRAFT_MODEL",
                     "CLIPDROP_API_KEY",
                     "MAGNIFIC_API_KEY",
                 } and env_value:
@@ -773,6 +780,17 @@ def load_tokens_from_file() -> None:
 
 
 load_tokens_from_file()
+
+
+def _normalize_brand_key(brand: str) -> str:
+    normalized = str(brand or "").strip().lower().replace("_", "-")
+    if normalized in {"drive", "yango drive", "yango-drive"}:
+        return "yango-drive"
+    return "yango"
+
+
+def _brand_logo_text(brand: str) -> str:
+    return BRAND_LOGO_TEXT_BY_KEY.get(_normalize_brand_key(brand), BRAND_LOGO_TEXT)
 
 
 def _default_vehicle_color(vehicle_type: str) -> str:
@@ -912,6 +930,45 @@ Final check before answering:
     if not prompt:
         raise RuntimeError("OpenAI returned an empty response.")
     return prompt
+
+
+def call_yango_drive_openai(
+    car_model: str,
+    color_name: str,
+    color_hex: str,
+    preferred_angle_label: str,
+    *,
+    country: str = "",
+    city: str = "",
+) -> str:
+    if not os.getenv("OPENAI_API_KEY"):
+        raise RuntimeError("OPENAI_API_KEY is not set")
+
+    angle_label = preferred_angle_label.strip()
+    angle_rules = ANGLE_RULES.get(angle_label, "")
+    location_parts = [part for part in [city.strip(), country.strip()] if part]
+    location_text = ", ".join(location_parts) or None
+
+    request = PromptRequest(
+        car=car_model,
+        color=color_name,
+        location_text=location_text,
+        preferred_angle=angle_rules or None,
+        preferred_angle_label=angle_label or None,
+    )
+
+    try:
+        request.car_with_year = infer_car_with_year_with_openai(request)
+    except Exception:
+        request.car_with_year = request.car
+
+    try:
+        request.vehicle_profile = classify_vehicle_profile_with_openai(request)
+    except Exception:
+        request.vehicle_profile = infer_vehicle_profile_from_keywords(request)
+
+    _ = color_hex
+    return generate_prompt_with_openai(request)
 
 
 def _mime_type_for_image_path(path: Path) -> str:
@@ -1472,23 +1529,31 @@ def _headline_segments(headlines: list[str], main_duration: float) -> list[tuple
     return segments
 
 
-def _build_logo_overlay_filter(width: int, height: int) -> str:
+def _build_logo_overlay_filter(width: int, height: int, brand: str = "yango") -> str:
     logo_font = ROOT / "assets" / "fonts" / "YangoGroupHeadline-HeavyItalic.ttf"
     logo_font_size = max(28, int(round(width * (52.833 / 1024))))
     logo_x = int(round(width * (48 / 1024)))
     logo_y = int(round(height * (48 / 576)))
+    logo_text = _brand_logo_text(brand)
     return (
         "drawtext="
         f"fontfile='{_ffmpeg_drawtext_path(logo_font)}':"
-        f"text='{_escape_drawtext_value(BRAND_LOGO_TEXT)}':"
+        f"text='{_escape_drawtext_value(logo_text)}':"
         f"fontsize={logo_font_size}:"
         "fontcolor=white@0.58:"
         f"x={logo_x}:y={logo_y}"
     )
 
 
-def _build_title_overlay_filters(width: int, height: int, main_duration: float, headlines: list[str], temp_dir: Path) -> list[str]:
-    filters: list[str] = [_build_logo_overlay_filter(width, height)]
+def _build_title_overlay_filters(
+    width: int,
+    height: int,
+    main_duration: float,
+    headlines: list[str],
+    temp_dir: Path,
+    brand: str = "yango",
+) -> list[str]:
+    filters: list[str] = [_build_logo_overlay_filter(width, height, brand=brand)]
     if main_duration <= 0:
         return filters
 
@@ -1517,7 +1582,12 @@ def _build_title_overlay_filters(width: int, height: int, main_duration: float, 
     return filters
 
 
-def _compose_video_with_titles_and_packshot(base_video_local_url: str, headlines: list[str], packshot_path: Optional[Path] = None) -> str:
+def _compose_video_with_titles_and_packshot(
+    base_video_local_url: str,
+    headlines: list[str],
+    packshot_path: Optional[Path] = None,
+    brand: str = "yango",
+) -> str:
     ffmpeg = _ffmpeg_binary()
     base_video_path = _resolve_output_url_to_path(base_video_local_url)
     if not base_video_path.exists():
@@ -1532,7 +1602,9 @@ def _compose_video_with_titles_and_packshot(base_video_local_url: str, headlines
     with tempfile.TemporaryDirectory(prefix="drive_perf_video_") as temp_dir_str:
         temp_dir = Path(temp_dir_str)
         main_video = temp_dir / "main.mp4"
-        filter_chain = ",".join(_build_title_overlay_filters(width, height, main_duration, headlines, temp_dir)) or "null"
+        filter_chain = ",".join(
+            _build_title_overlay_filters(width, height, main_duration, headlines, temp_dir, brand=brand)
+        ) or "null"
         _run_subprocess(
             [
                 ffmpeg,
@@ -1604,11 +1676,16 @@ def _compose_video_with_titles_and_packshot(base_video_local_url: str, headlines
         return f"/output/videos/{final_name}"
 
 
-def remix_video_titles(base_video_url: str, headlines: Optional[list[str]] = None) -> str:
-    return _compose_video_with_titles_and_packshot(base_video_url, headlines or [])
+def remix_video_titles(base_video_url: str, headlines: Optional[list[str]] = None, brand: str = "yango") -> str:
+    return _compose_video_with_titles_and_packshot(base_video_url, headlines or [], brand=brand)
 
 
-def generate_video_with_kling(image_url: str, prompt: str, headlines: Optional[list[str]] = None) -> tuple[str, str, str]:
+def generate_video_with_kling(
+    image_url: str,
+    prompt: str,
+    headlines: Optional[list[str]] = None,
+    brand: str = "yango",
+) -> tuple[str, str, str]:
     prediction = _kling_create_image_to_video_task(image_url=image_url, prompt=prompt)
     timeout_seconds = int(os.getenv("KLING_TIMEOUT_SECONDS", "240") or "240")
     poll_interval = float(os.getenv("KLING_POLL_INTERVAL_SECONDS", "5") or "5")
@@ -1623,7 +1700,7 @@ def generate_video_with_kling(image_url: str, prompt: str, headlines: Optional[l
         video_url = _extract_kling_video_url(payload)
         if video_url:
             raw_local_video_url = _save_generated_video_local(video_url)
-            final_video_url = _compose_video_with_titles_and_packshot(raw_local_video_url, headlines or [])
+            final_video_url = _compose_video_with_titles_and_packshot(raw_local_video_url, headlines or [], brand=brand)
             return video_url, raw_local_video_url, final_video_url
         if status in {"failed", "canceled", "cancelled"}:
             error_detail = str(payload.get("message") or payload.get("error") or status).strip()
@@ -1788,6 +1865,46 @@ def generate_image_with_openai(prompt: str, *, country: str = "") -> tuple[str, 
     image_bytes = base64.b64decode(b64_json)
     local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country)
     return local_url, local_url
+
+
+def generate_image_with_recraft(prompt: str, *, country: str = "") -> tuple[str, str]:
+    api_key = os.getenv("RECRAFT_API_TOKEN") or os.getenv("RECRAFT_API_KEY")
+    if not api_key:
+        raise RuntimeError("RECRAFT_API_TOKEN (or RECRAFT_API_KEY) is not set")
+
+    model = os.getenv("RECRAFT_MODEL", "recraftv4")
+    size = "16:9"
+    client = OpenAI(api_key=api_key, base_url="https://external.api.recraft.ai/v1")
+    try:
+        response = client.images.generate(
+            model=model,
+            prompt=prompt,
+            size=size,
+            n=1,
+            response_format="b64_json",
+        )
+    except Exception:
+        response = client.images.generate(
+            model=model,
+            prompt=prompt,
+            size=size,
+            n=1,
+        )
+    if not response.data:
+        raise RuntimeError("Recraft returned no image data")
+
+    image = response.data[0]
+    image_url = getattr(image, "url", "") or ""
+    b64_json = getattr(image, "b64_json", "") or ""
+    if b64_json:
+        image_bytes = base64.b64decode(b64_json)
+        local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country)
+        return image_url, local_url
+    if image_url:
+        local_url = _save_generated_image_local(image_url)
+        return image_url, local_url
+
+    raise RuntimeError("Recraft returned neither b64_json nor image URL")
 
 
 def generate_image_with_openai_face_reference(
@@ -3144,11 +3261,13 @@ def _render_master_banner_by_size(
     image_shift_x: int = 0,
     image_shift_y: int = 0,
     banner_language: str = "general",
+    brand: str = "yango",
 ) -> Image.Image:
     width, height = BANNER_SIZE_MAP[size_key]
     canvas = Image.new("RGBA", (width, height), "#d9d9d9")
     draw = ImageDraw.Draw(canvas, "RGBA")
     variant = str(layout_variant or "photo").strip().lower()
+    logo_text = _brand_logo_text(brand)
     show_gradients = variant == "photo"
     main_text_fill = "#000000" if variant == "black" else "white"
     disclaimer_rgb = (0, 0, 0) if variant == "black" else (255, 255, 255)
@@ -3266,7 +3385,7 @@ def _render_master_banner_by_size(
                 target_bottom_y=badge_target_bottom_y,
             )
 
-        logo_box = draw.textbbox((0, 0), BRAND_LOGO_TEXT, font=logo_font)
+        logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
         logo_w = max(1, logo_box[2] - logo_box[0])
         if align_mode == "center":
             logo_x = (width - logo_w) // 2
@@ -3274,7 +3393,7 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, 80), BRAND_LOGO_TEXT, fill=main_text_fill, font=logo_font)
+        draw.text((logo_x, 80), logo_text, fill=main_text_fill, font=logo_font)
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -3409,7 +3528,7 @@ def _render_master_banner_by_size(
                 target_bottom_y=badge_target_bottom_y,
             )
 
-        logo_box = draw.textbbox((0, 0), BRAND_LOGO_TEXT, font=logo_font)
+        logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
         logo_w = max(1, logo_box[2] - logo_box[0])
         if align_mode == "center":
             logo_x = (width - logo_w) // 2
@@ -3417,7 +3536,7 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, 80), BRAND_LOGO_TEXT, fill=main_text_fill, font=logo_font)
+        draw.text((logo_x, 80), logo_text, fill=main_text_fill, font=logo_font)
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -3532,7 +3651,7 @@ def _render_master_banner_by_size(
             ],
             highlight_hex=accent_hex,
         )
-        logo_box = draw.textbbox((0, 0), BRAND_LOGO_TEXT, font=logo_font)
+        logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
         logo_w = max(1, logo_box[2] - logo_box[0])
         logo_h = max(1, logo_box[3] - logo_box[1])
         bottom_padding = 32
@@ -3543,7 +3662,7 @@ def _render_master_banner_by_size(
             logo_x = width - 32 - logo_w
         else:
             logo_x = 32
-        draw.text((logo_x, logo_y), BRAND_LOGO_TEXT, fill=main_text_fill, font=logo_font)
+        draw.text((logo_x, logo_y), logo_text, fill=main_text_fill, font=logo_font)
         disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, 511)
         disclaimer_h = _measure_multiline_with_ratio(
             draw,
@@ -3606,7 +3725,7 @@ def _render_master_banner_by_size(
             else 0
         )
         disclaimer_h = _measure_multiline_with_ratio(draw, text=disclaimer_wrapped, font=disclaimer_font, line_height_ratio=1.28)
-        logo_box = draw.textbbox((0, 0), BRAND_LOGO_TEXT, font=logo_font)
+        logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
         logo_w = max(1, logo_box[2] - logo_box[0])
         logo_h = max(1, logo_box[3] - logo_box[1])
 
@@ -3688,7 +3807,7 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, int(cursor_y)), BRAND_LOGO_TEXT, fill=main_text_fill, font=logo_font)
+        draw.text((logo_x, int(cursor_y)), logo_text, fill=main_text_fill, font=logo_font)
         cursor_y += logo_h + gap_logo_disclaimer
         _draw_multiline_with_ratio(
             canvas,
@@ -3718,6 +3837,7 @@ def render_banner_images(
     banner_image_overrides: Optional[dict[tuple[int, str], dict]] = None,
     country: str = "",
     banner_source_url: str = "",
+    brand: str = "yango",
 ) -> tuple[list[dict], str, str, dict]:
     _ensure_output_directories()
 
@@ -3831,6 +3951,7 @@ def render_banner_images(
                 image_shift_x=render_image_shift_x,
                 image_shift_y=render_image_shift_y,
                 banner_language=banner_language,
+                brand=brand,
             )
 
             file_name = f"banner_{normalized_layout}_set{set_index + 1}_{size_key}_{now}.png"
@@ -4000,6 +4121,7 @@ class Handler(SimpleHTTPRequestHandler):
                 service = str(body.get("service", "Ride-hailing")).strip()
                 style = str(body.get("style", "Photo")).strip()
                 country = str(body.get("country", "")).strip()
+                city = str(body.get("city", "")).strip()
                 transport_label = str(body.get("transportLabel", "")).strip()
                 transport_code = str(body.get("transportCode", "")).strip()
                 basic_class = str(body.get("basicClass", "")).strip()
@@ -4021,6 +4143,35 @@ class Handler(SimpleHTTPRequestHandler):
                             "image_url": image_url,
                             "image_local_url": local_image_url,
                             "prompt": prompt,
+                        },
+                    )
+                    return
+                if style.strip().lower() in {"yango drive", "yango-drive", "drive"}:
+                    if not car_model:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "vehicleModel is required"})
+                        return
+                    if not country:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "country is required"})
+                        return
+                    if not city:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "city is required"})
+                        return
+                    prompt = call_yango_drive_openai(
+                        car_model,
+                        color_name,
+                        color_hex,
+                        preferred_angle,
+                        country=country,
+                        city=city,
+                    )
+                    image_url, local_image_url = generate_image_with_recraft(prompt, country=country)
+                    self._send_json(
+                        HTTPStatus.OK,
+                        {
+                            "image_url": image_url,
+                            "image_local_url": local_image_url,
+                            "prompt": prompt,
+                            "brand": "yango-drive",
                         },
                     )
                     return
@@ -4091,6 +4242,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path == "/api/generate-video":
                 image_url = str(body.get("imageUrl", "")).strip()
                 prompt = str(body.get("prompt", "")).strip()
+                brand = _normalize_brand_key(str(body.get("brand", "yango-drive")).strip())
                 headlines_raw = body.get("headlines", [])
                 if not image_url:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "imageUrl is required"})
@@ -4105,6 +4257,7 @@ class Handler(SimpleHTTPRequestHandler):
                     image_url=image_url,
                     prompt=prompt,
                     headlines=headlines,
+                    brand=brand,
                 )
                 library_video = _upsert_video_library_record(
                     raw_local_video_url or local_video_url or video_url,
@@ -4125,6 +4278,7 @@ class Handler(SimpleHTTPRequestHandler):
 
             if self.path == "/api/remix-video":
                 video_url = str(body.get("videoUrl", "")).strip()
+                brand = _normalize_brand_key(str(body.get("brand", "yango-drive")).strip())
                 headlines_raw = body.get("headlines", [])
                 if not video_url:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "videoUrl is required"})
@@ -4137,7 +4291,7 @@ class Handler(SimpleHTTPRequestHandler):
                     self._send_json(HTTPStatus.NOT_FOUND, {"error": "Video not found"})
                     return
                 base_video_url = str(source_record.get("base_video_url") or video_url).strip()
-                remixed_video_url = remix_video_titles(base_video_url, headlines)
+                remixed_video_url = remix_video_titles(base_video_url, headlines, brand=brand)
                 library_video = _upsert_video_library_record(
                     base_video_url,
                     base_video_url=base_video_url,
@@ -4256,6 +4410,7 @@ class Handler(SimpleHTTPRequestHandler):
                     }
                 ]
             layout_type = str(body.get("layoutType", "photo")).strip() or "photo"
+            brand = _normalize_brand_key(str(body.get("brand", "yango")).strip())
             try:
                 image_scale = float(body.get("imageScale", 1.0) or 1.0)
             except (TypeError, ValueError):
@@ -4326,6 +4481,7 @@ class Handler(SimpleHTTPRequestHandler):
                 banner_image_overrides=banner_image_overrides,
                 country=country,
                 banner_source_url=banner_source_url,
+                brand=brand,
             )
             if not banners:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "No supported sizes provided"})
