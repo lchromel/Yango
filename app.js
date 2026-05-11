@@ -574,9 +574,9 @@ function getImageLibraryCountryLabel(item) {
   return "Other";
 }
 
-function getImageLibraryCountryOptions() {
+function getImageLibraryCountryOptions(libraryItems = getServiceFilteredImageLibrary()) {
   const seen = new Set();
-  getServiceFilteredImageLibrary().forEach((item) => {
+  libraryItems.forEach((item) => {
     const label = getImageLibraryCountryLabel(item);
     if (label) seen.add(label);
   });
@@ -607,11 +607,15 @@ function getActiveImageLibraryServiceFilter() {
   return state.selectedService;
 }
 
-function getServiceFilteredImageLibrary() {
-  const selected = getActiveImageLibraryServiceFilter();
+function getImageLibraryItemsForService(service) {
+  const selected = normalizeServiceKey(service);
   return state.imageLibrary.filter((item) => {
     return getLibraryImageService(item) === selected;
   });
+}
+
+function getServiceFilteredImageLibrary() {
+  return getImageLibraryItemsForService(getActiveImageLibraryServiceFilter());
 }
 
 function getActiveSourceLibraryCountry(options = getImageLibraryCountryOptions()) {
@@ -847,7 +851,7 @@ async function deleteLibraryVideo(videoUrl) {
 
 function renderSourceLibrary() {
   if (!sourceLibraryEl) return;
-  const libraryItems = getServiceFilteredImageLibrary();
+  const libraryItems = getImageLibraryItemsForService(state.bannerBrand);
   sourceLibraryEl.innerHTML = "";
   sourceLibraryEl.classList.toggle("hidden", !state.sourceLibraryOpen || !libraryItems.length);
   if (sourceLibraryToggleEl) {
@@ -863,12 +867,12 @@ function renderSourceLibrary() {
   if (!libraryItems.length) {
     const empty = document.createElement("p");
     empty.className = "source-library-empty";
-    empty.textContent = isDriveService() ? "No saved Yango Drive images yet." : "No saved ride-hailing images yet.";
+    empty.textContent = state.bannerBrand === "yango-drive" ? "No saved Yango Drive images yet." : "No saved ride-hailing images yet.";
     sourceLibraryEl.appendChild(empty);
     return;
   }
 
-  const options = getImageLibraryCountryOptions();
+  const options = getImageLibraryCountryOptions(libraryItems);
   const activeCountry = getActiveSourceLibraryCountry(options);
   state.sourceLibraryCountry = activeCountry;
   if (!options.includes(activeCountry)) {
@@ -976,7 +980,7 @@ function renderSourceLibrary() {
 
 function renderVideoImageLibrary() {
   if (!videoImageLibraryEl) return;
-  const libraryItems = getServiceFilteredImageLibrary();
+  const libraryItems = getImageLibraryItemsForService(state.videoBrand);
   videoImageLibraryEl.innerHTML = "";
   videoImageLibraryEl.classList.toggle("hidden", !state.videoImageLibraryOpen || !libraryItems.length);
   if (videoImageLibraryToggleEl) {
@@ -3554,7 +3558,7 @@ topActionBtn.addEventListener("click", async () => {
 
 if (sourceLibraryToggleEl) {
   sourceLibraryToggleEl.addEventListener("click", () => {
-    if (!getServiceFilteredImageLibrary().length) return;
+    if (!getImageLibraryItemsForService(state.bannerBrand).length) return;
     state.sourceLibraryOpen = !state.sourceLibraryOpen;
     if (!state.sourceLibraryOpen) {
       state.sourceLibraryCountryMenuOpen = false;
@@ -3573,7 +3577,7 @@ if (videoLibraryToggleEl) {
 
 if (videoImageLibraryToggleEl) {
   videoImageLibraryToggleEl.addEventListener("click", () => {
-    if (!getServiceFilteredImageLibrary().length) return;
+    if (!getImageLibraryItemsForService(state.videoBrand).length) return;
     state.videoImageLibraryOpen = !state.videoImageLibraryOpen;
     renderUiState();
   });
