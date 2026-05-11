@@ -364,7 +364,8 @@ body {
   min-height: 22px;
 }
 
-.layout-type-group {
+.layout-type-group,
+.layout-logo-group {
   display: flex;
   gap: 4px;
   align-items: center;

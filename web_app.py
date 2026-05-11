@@ -982,9 +982,7 @@ def _load_yandex_go_logo_image(variant: str, color: str, target_height: int) -> 
 
 def _uses_brand_icon_layout(brand: str, logo_variant: str = "") -> bool:
     normalized_brand = _normalize_brand_key(brand)
-    if normalized_brand in {"yango", "yango-pro"}:
-        return True
-    return normalized_brand == "yandex-go" and _normalize_banner_logo_variant(logo_variant) == "icon"
+    return normalized_brand in BRAND_ICON_ASSET_BY_KEY and _normalize_banner_logo_variant(logo_variant) == "icon"
 
 
 @lru_cache(maxsize=24)

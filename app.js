@@ -68,7 +68,6 @@ const BANNER_BRAND_OPTIONS = [
   { label: "Yango Pro", value: "yango-pro" },
 ];
 const YANDEX_GO_LOGO_OPTIONS = [
-  { label: "Icon", value: "icon" },
   { label: "English", value: "en" },
   { label: "Armenia", value: "ar" },
   { label: "Georgia", value: "ge" },
@@ -96,6 +95,10 @@ const BANNER_LAYOUTS = [
   { label: "Photo", value: "photo", disabled: false },
   { label: "Black", value: "black", disabled: false },
   { label: "White", value: "white", disabled: false },
+];
+const BANNER_LOGO_LAYOUT_OPTIONS = [
+  { label: "Logo", value: "default" },
+  { label: "Icon", value: "icon" },
 ];
 const TEXT_ALIGN_OPTIONS = [
   { value: "left", icon: "./assets/icons/text-align-left.svg", alt: "Align left" },
@@ -1861,6 +1864,28 @@ function renderLayoutTypes() {
     layoutGroup.appendChild(chip);
   });
 
+  const logoLayoutGroup = document.createElement("div");
+  logoLayoutGroup.className = "layout-logo-group";
+  if (supportsBannerIconLayout(state.bannerBrand)) {
+    const normalizedLogoLayout = state.bannerLogoVariant === "icon" ? "icon" : "default";
+    BANNER_LOGO_LAYOUT_OPTIONS.forEach((optionDef) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "angle-chip";
+      chip.textContent = optionDef.label;
+      if (normalizedLogoLayout === optionDef.value) chip.classList.add("is-active");
+      chip.addEventListener("click", () => {
+        state.bannerLogoVariant = optionDef.value;
+        invalidateRenderedBanners();
+        renderLayoutTypes();
+        renderBannerLogoSelector();
+        renderBannerSetsView();
+        renderTopAction();
+      });
+      logoLayoutGroup.appendChild(chip);
+    });
+  }
+
   const accentGroup = document.createElement("div");
   accentGroup.className = "layout-accent-group";
   ["lime", "red"].forEach((key) => {
@@ -1900,8 +1925,14 @@ function renderLayoutTypes() {
   });
 
   row.appendChild(layoutGroup);
+  if (logoLayoutGroup.childElementCount) row.appendChild(logoLayoutGroup);
   row.appendChild(accentGroup);
   layoutTypeRowEl.appendChild(row);
+}
+
+function supportsBannerIconLayout(brand = state.bannerBrand) {
+  const normalizedBrand = String(brand || "").trim().toLowerCase();
+  return ["yango", "yango-pro", "yandex-go"].includes(normalizedBrand);
 }
 
 function renderBrandSelector(rowEl, selectedBrand, onSelect, options = {}) {
@@ -1928,6 +1959,7 @@ function renderBrandSelector(rowEl, selectedBrand, onSelect, options = {}) {
 
 function getBannerLogoOptions(brand = state.bannerBrand) {
   const normalizedBrand = String(brand || "").trim().toLowerCase();
+  if (state.bannerLogoVariant === "icon") return [];
   if (normalizedBrand === "yandex-go") return YANDEX_GO_LOGO_OPTIONS;
   if (normalizedBrand === "yango-drive") {
     return [
@@ -1942,9 +1974,10 @@ function getBannerLogoOptions(brand = state.bannerBrand) {
 }
 
 function normalizeBannerLogoVariantForBrand(brand, value) {
+  const normalizedValue = String(value || "").trim().toLowerCase();
+  if (normalizedValue === "icon" && supportsBannerIconLayout(brand)) return "icon";
   const options = getBannerLogoOptions(brand);
   if (!options.length) return "default";
-  const normalizedValue = String(value || "").trim().toLowerCase();
   if (options.some((optionDef) => optionDef.value === normalizedValue)) return normalizedValue;
   return options[0].value;
 }
