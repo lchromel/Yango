@@ -344,6 +344,9 @@ body {
   text-transform: uppercase;
   padding: 6px 8px;
   cursor: pointer;
+  line-height: 1;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .angle-chip.is-active {
@@ -360,18 +363,29 @@ body {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
+  gap: 8px;
   width: 100%;
   min-height: 22px;
 }
 
+.layout-type-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
 .layout-type-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   align-items: center;
+  min-width: 0;
 }
 
 .layout-accent-group {
   display: flex;
+  flex: 0 0 auto;
   gap: 4px;
   align-items: center;
 }
@@ -1417,6 +1431,11 @@ body {
 .slot-1200x1350 {
   width: 300px;
   height: 337px;
+}
+
+.slot-1200x1500 {
+  width: 300px;
+  height: 375px;
 }
 
 .banner-slot img {

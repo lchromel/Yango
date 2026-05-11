@@ -28,7 +28,7 @@ from urllib.parse import urlparse, unquote
 from typing import Iterable, Optional, Union
 
 from openai import OpenAI
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 from bot import (
     PromptRequest,
     classify_vehicle_profile_with_openai,
@@ -108,6 +108,7 @@ HEADLINE_ITALIC_FONT_CANDIDATES = [
 BANNER_SIZE_MAP = {
     "1200x1200": (1200, 1200),
     "1200x1350": (1200, 1350),
+    "1200x1500": (1200, 1500),
     "1200x628": (1200, 628),
     "1080x1920": (1080, 1920),
 }
@@ -127,6 +128,17 @@ BADGE_LAYOUT_BY_SIZE = {
     "1200x1200": {
         "x": 752.45068359375,
         "y": 505.1037292480469,
+        "w": 378.0260082370387,
+        "h": 219.16941789846555,
+        "radius": 28.339,
+        "padding": 20.027,
+        "gap": 16.128,
+        "top_font_size": 64.51,
+        "bottom_font_size": 136.337,
+    },
+    "1200x1500": {
+        "x": 752.45068359375,
+        "y": 721.3955078125,
         "w": 378.0260082370387,
         "h": 219.16941789846555,
         "radius": 28.339,
@@ -162,6 +174,7 @@ BADGE_LAYOUT_BY_SIZE = {
 CENTER_BADGE_Y_ADJUST_BY_SIZE = {
     "1200x628": 0,
     "1200x1350": -56,
+    "1200x1500": -56,
     "1080x1920": 24,
 }
 
@@ -169,6 +182,7 @@ RIGHT_BADGE_Y_ADJUST_BY_SIZE = {
     "1200x628": -24,
     "1200x1200": -40,
     "1200x1350": -48,
+    "1200x1500": -48,
     "1080x1920": -20,
 }
 
@@ -176,6 +190,7 @@ CENTER_BADGE_SPACING_LOCK_BY_SIZE = {
     # Keep center spacing stable and independent from right-align tuning.
     "1200x1200": -24,
     "1200x1350": -32,
+    "1200x1500": -32,
     "1080x1920": 24,
 }
 
@@ -1005,6 +1020,48 @@ def _draw_brand_icon(canvas: Image.Image, *, brand: str, x: int, y: int, size: i
         return False
     canvas.alpha_composite(icon, (int(x), int(y)))
     return True
+
+
+def _draw_brand_icon_shadow(canvas: Image.Image, *, brand: str, x: int, y: int, size: int) -> bool:
+    icon = _load_brand_icon_image(brand, size)
+    if icon is None:
+        return False
+    blur = max(14, int(round(size * 0.13)))
+    pad = blur * 2
+    alpha = Image.new("L", (icon.width + pad * 2, icon.height + pad * 2), 0)
+    alpha.paste(icon.getchannel("A"), (pad, pad))
+    alpha = alpha.filter(ImageFilter.GaussianBlur(blur))
+    alpha = alpha.point(lambda value: int(value * 0.42))
+    shadow = Image.new("RGBA", alpha.size, (0, 0, 0, 0))
+    shadow.putalpha(alpha)
+    offset_y = max(8, int(round(size * 0.08)))
+    canvas.alpha_composite(shadow, (int(x - pad), int(y + offset_y - pad)))
+    canvas.alpha_composite(icon, (int(x), int(y)))
+    return True
+
+
+@lru_cache(maxsize=24)
+def _load_yandex_go_icon_glyph(fill: str, target_height: int) -> Optional[Image.Image]:
+    _ = fill
+    source_name = "YandexGo_icon_glyph_164.png" if int(target_height or 0) > 112 else "YandexGo_icon_glyph_112.png"
+    asset_path = ROOT / "assets" / "logos" / source_name
+    if not asset_path.exists():
+        return None
+    target_height = max(1, int(target_height or 1))
+    with Image.open(asset_path) as glyph_image:
+        glyph = glyph_image.convert("RGBA")
+    if glyph.height == target_height:
+        return glyph
+    target_width = max(1, int(round(glyph.width * target_height / max(1, glyph.height))))
+    return glyph.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+
+def _should_use_go_icon_glyph(brand: str, logo_variant: str, size_key: str) -> bool:
+    return (
+        _normalize_brand_key(brand) == "yandex-go"
+        and _normalize_banner_logo_variant(logo_variant) == "icon"
+        and size_key in {"1080x1920", "1200x628"}
+    )
 
 
 def _measure_banner_logo(
@@ -2987,7 +3044,7 @@ def _draw_price_badge(
     bottom_value = str(bottom_text or "").strip()
 
     size_scale = 1.0
-    if text_align == "center" and size_key in {"1200x1200", "1200x1350", "1080x1920"}:
+    if text_align == "center" and size_key in {"1200x1200", "1200x1350", "1200x1500", "1080x1920"}:
         size_scale = 0.8
 
     base_badge_w = max(1, int(round(spec["w"] * size_scale)))
@@ -3147,8 +3204,8 @@ def _draw_price_badge(
     center_extra_y = 0
     if text_align == "center" and size_key in CENTER_BADGE_SPACING_LOCK_BY_SIZE:
         center_extra_y = int(CENTER_BADGE_SPACING_LOCK_BY_SIZE.get(size_key, 0))
-    elif text_align == "left" and size_key == "1200x1350":
-        # For 1200x1500 composition only: left align spacing should match right align spacing.
+    elif text_align == "left" and size_key in {"1200x1350", "1200x1500"}:
+        # For tall compositions: left align spacing should match right align spacing.
         center_extra_y = int(RIGHT_BADGE_Y_ADJUST_BY_SIZE.get(size_key, 0))
     elif text_align == "center":
         center_extra_y = int(CENTER_BADGE_Y_ADJUST_BY_SIZE.get(size_key, 0))
@@ -3164,6 +3221,7 @@ def _draw_price_badge(
     text_top_min_by_size = {
         "1200x1200": 80,
         "1200x1350": 80,
+        "1200x1500": 80,
         "1080x1920": 80,
         "1200x628": 32,
     }
@@ -3673,6 +3731,771 @@ def _clamp_image_rect_to_canvas(
     return x, y, w, h
 
 
+@lru_cache(maxsize=256)
+def _rounded_rect_mask(width: int, height: int, radius: int) -> Image.Image:
+    width = max(1, int(width))
+    height = max(1, int(height))
+    radius = max(0, int(radius))
+    scale = 4
+    hi = Image.new("L", (width * scale, height * scale), 0)
+    draw = ImageDraw.Draw(hi)
+    draw.rounded_rectangle(
+        (0, 0, width * scale - 1, height * scale - 1),
+        radius=radius * scale,
+        fill=255,
+    )
+    return hi.resize((width, height), Image.Resampling.LANCZOS)
+
+
+def _is_yandex_go_frame_palette(brand: str, logo_variant: str) -> bool:
+    normalized_brand = _normalize_brand_key(brand)
+    if normalized_brand == "yandex-go":
+        return True
+    if normalized_brand == "yango-drive":
+        return bool(_effective_yandex_go_logo_variant(normalized_brand, logo_variant))
+    return False
+
+
+def _is_frame_layout_variant(layout_variant: str) -> bool:
+    normalized = str(layout_variant or "").strip().lower().replace("_", "-")
+    return normalized.startswith("frame") or normalized in {"figma", "new"}
+
+
+def _frame_layout_tone(layout_variant: str) -> str:
+    normalized = str(layout_variant or "").strip().lower().replace("_", "-")
+    if normalized in {"frame-black", "frame-dark"}:
+        return "dark"
+    if normalized in {"frame-red"}:
+        return "red"
+    if normalized in {"frame-white", "frame-light"}:
+        return "light"
+    return "primary"
+
+
+def _resolve_frame_theme(brand: str, logo_variant: str, layout_variant: str) -> dict:
+    tone = _frame_layout_tone(layout_variant)
+    use_go_palette = _is_yandex_go_frame_palette(brand, logo_variant)
+    if use_go_palette:
+        is_light = tone == "light"
+        is_dark = tone == "dark"
+        bg = "#000000" if is_dark else ("#FFFFFF" if is_light else "#FFEA00")
+        text = "#FFFFFF" if is_dark else "#000000"
+        disclaimer = (255, 255, 255) if is_dark else (0, 0, 0)
+        return {
+            "bg": bg,
+            "photo": "#D9D9D9",
+            "text": text,
+            "disclaimer": disclaimer,
+            "photo_mark": "#FFFFFF",
+            "mark": "#FFEA00" if is_dark else "#000000",
+            "is_go_palette": True,
+        }
+
+    is_red = tone in {"red", "light"}
+    is_dark = tone == "dark"
+    bg = "#000000" if is_dark else ("#FF1A1A" if is_red else "#D8D8D8")
+    text = "#FFFFFF" if is_dark or is_red else "#000000"
+    disclaimer = (255, 255, 255) if is_dark or is_red else (0, 0, 0)
+    return {
+        "bg": bg,
+        "photo": "#D8D8D8" if not is_red else "#D9D9D9",
+        "text": text,
+        "disclaimer": disclaimer,
+        "photo_mark": "#FFFFFF",
+        "mark": "#FFFFFF" if is_red else "#FF1A1A",
+        "is_go_palette": False,
+    }
+
+
+def _paste_rounded_cover(
+    canvas: Image.Image,
+    source: Optional[Image.Image],
+    *,
+    box: tuple[int, int, int, int],
+    radius: int,
+    fallback_fill: str,
+    image_scale: float = 1.0,
+    image_shift_x: int = 0,
+    image_shift_y: int = 0,
+) -> None:
+    x, y, w, h = [int(round(v)) for v in box]
+    w = max(1, w)
+    h = max(1, h)
+    panel = Image.new("RGBA", (w, h), fallback_fill)
+    if source is not None:
+        source_rgba = source.convert("RGBA")
+        safe_scale = max(1.0, min(1.5, float(image_scale or 1.0)))
+        cover_scale = max(w / max(1, source_rgba.width), h / max(1, source_rgba.height)) * safe_scale
+        resized_w = max(1, int(round(source_rgba.width * cover_scale)))
+        resized_h = max(1, int(round(source_rgba.height * cover_scale)))
+        resized = source_rgba.resize((resized_w, resized_h), Image.Resampling.LANCZOS)
+        paste_x = int(round((w - resized_w) / 2 + int(image_shift_x or 0)))
+        paste_y = int(round((h - resized_h) / 2 + int(image_shift_y or 0)))
+        if resized_w >= w:
+            paste_x = min(0, max(w - resized_w, paste_x))
+        else:
+            paste_x = int(round((w - resized_w) / 2))
+        if resized_h >= h:
+            paste_y = min(0, max(h - resized_h, paste_y))
+        else:
+            paste_y = int(round((h - resized_h) / 2))
+        panel.alpha_composite(resized, (paste_x, paste_y))
+    canvas.paste(panel, (x, y), _rounded_rect_mask(w, h, radius))
+
+
+def _draw_rounded_vertical_gradient(
+    canvas: Image.Image,
+    *,
+    box: tuple[int, int, int, int],
+    radius: int,
+    from_top: bool,
+    gradient_height: int,
+    opacity: int,
+) -> None:
+    x, y, w, h = [int(round(v)) for v in box]
+    w = max(1, w)
+    h = max(1, h)
+    gradient_height = max(1, min(h, int(gradient_height or h)))
+    opacity = max(0, min(255, int(opacity or 0)))
+    if opacity <= 0:
+        return
+
+    alpha = Image.new("L", (w, h), 0)
+    alpha_draw = ImageDraw.Draw(alpha)
+    for row in range(h):
+        dist = row if from_top else h - 1 - row
+        if dist >= gradient_height:
+            continue
+        value = int(round(opacity * (1.0 - (dist / gradient_height))))
+        alpha_draw.line((0, row, w, row), fill=value)
+    rounded = _rounded_rect_mask(w, h, radius)
+    alpha = ImageChops.multiply(alpha, rounded)
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    overlay.putalpha(alpha)
+    canvas.alpha_composite(overlay, (x, y))
+
+
+def _measure_figma_brand_logo(
+    draw: ImageDraw.ImageDraw,
+    *,
+    brand: str,
+    logo_variant: str,
+    max_width: int,
+    size: int,
+    fill,
+) -> tuple[int, int, Optional[Image.Image], Optional[ImageFont.FreeTypeFont]]:
+    normalized_brand = _normalize_brand_key(brand)
+    normalized_variant = _normalize_banner_logo_variant(logo_variant)
+    if normalized_variant == "icon" and normalized_brand in BRAND_ICON_ASSET_BY_KEY:
+        return size, size, None, None
+
+    effective_variant = _effective_yandex_go_logo_variant(normalized_brand, logo_variant)
+    if normalized_brand == "yandex-go" or effective_variant:
+        effective_variant = effective_variant or "en"
+        logo_image = _load_yandex_go_logo_image(effective_variant, _logo_color_key(fill), size)
+        if logo_image is not None:
+            if logo_image.width > max_width:
+                ratio = max_width / max(1, logo_image.width)
+                logo_image = logo_image.resize(
+                    (max(1, int(round(logo_image.width * ratio))), max(1, int(round(logo_image.height * ratio)))),
+                    Image.Resampling.LANCZOS,
+                )
+            return logo_image.width, logo_image.height, logo_image, None
+
+    logo_text = _brand_logo_text(normalized_brand)
+    logo_font_path = ROOT / "assets" / "fonts" / "YangoGroupHeadline-HeavyItalic.ttf"
+    logo_font = _fit_font_to_width(draw, logo_text, logo_font_path, size, max_width=max_width, min_size=32)
+    logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
+    return max(1, logo_box[2] - logo_box[0]), max(1, logo_box[3] - logo_box[1]), None, logo_font
+
+
+def _draw_figma_brand_logo(
+    canvas: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    *,
+    brand: str,
+    logo_variant: str,
+    x: int,
+    y: int,
+    max_width: int,
+    size: int,
+    fill,
+    shadow: bool = False,
+) -> tuple[int, int]:
+    normalized_brand = _normalize_brand_key(brand)
+    normalized_variant = _normalize_banner_logo_variant(logo_variant)
+    if normalized_variant == "icon" and normalized_brand in BRAND_ICON_ASSET_BY_KEY:
+        draw_icon = _draw_brand_icon_shadow if shadow else _draw_brand_icon
+        if draw_icon(canvas, brand=normalized_brand, x=x, y=y, size=size):
+            return size, size
+
+    logo_w, logo_h, logo_image, logo_font = _measure_figma_brand_logo(
+        draw,
+        brand=normalized_brand,
+        logo_variant=logo_variant,
+        max_width=max_width,
+        size=size,
+        fill=fill,
+    )
+    if logo_image is not None:
+        canvas.alpha_composite(logo_image, (int(x), int(y)))
+        return logo_w, logo_h
+
+    logo_text = _brand_logo_text(normalized_brand)
+    if logo_font is None:
+        logo_font_path = ROOT / "assets" / "fonts" / "YangoGroupHeadline-HeavyItalic.ttf"
+        logo_font = _fit_font_to_width(draw, logo_text, logo_font_path, size, max_width=max_width, min_size=32)
+    logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
+    draw.text((int(x), int(y) - int(logo_box[1])), logo_text, fill=fill, font=logo_font)
+    return max(1, logo_box[2] - logo_box[0]), max(1, logo_box[3] - logo_box[1])
+
+
+def _mark_x_for_align(
+    *,
+    align_mode: str,
+    container_x: int,
+    container_w: int,
+    mark_w: int,
+    icon_left_when_center: bool,
+) -> int:
+    if align_mode == "right":
+        return int(container_x + container_w - mark_w)
+    if align_mode == "center" and not icon_left_when_center:
+        return int(container_x + (container_w - mark_w) // 2)
+    return int(container_x)
+
+
+def _measure_wrapped_block_height(
+    draw: ImageDraw.ImageDraw,
+    *,
+    text: str,
+    font: Union[ImageFont.FreeTypeFont, ImageFont.ImageFont],
+    wrap_width: int,
+    line_height_ratio: float,
+) -> int:
+    text_value = str(text or "").strip()
+    if not text_value:
+        return 0
+    return _measure_wrapped_height(
+        draw,
+        text=text_value,
+        font=font,
+        wrap_width=wrap_width,
+        line_height_ratio=line_height_ratio,
+    )
+
+
+def _measure_figma_text_stack(
+    draw: ImageDraw.ImageDraw,
+    *,
+    title_text: str,
+    subtitle_text: str,
+    disclaimer_text: str,
+    title_font: Union[ImageFont.FreeTypeFont, ImageFont.ImageFont],
+    subtitle_font: Union[ImageFont.FreeTypeFont, ImageFont.ImageFont],
+    disclaimer_font: Union[ImageFont.FreeTypeFont, ImageFont.ImageFont],
+    content_width: int,
+    include_disclaimer: bool,
+) -> int:
+    total = _measure_wrapped_block_height(
+        draw,
+        text=title_text,
+        font=title_font,
+        wrap_width=content_width,
+        line_height_ratio=0.9,
+    )
+    subtitle_h = _measure_wrapped_block_height(
+        draw,
+        text=subtitle_text,
+        font=subtitle_font,
+        wrap_width=content_width,
+        line_height_ratio=1.1,
+    )
+    if subtitle_h:
+        total += 48 + subtitle_h
+    if include_disclaimer:
+        disclaimer_h = _measure_wrapped_block_height(
+            draw,
+            text=disclaimer_text,
+            font=disclaimer_font,
+            wrap_width=content_width,
+            line_height_ratio=1.28,
+        )
+        if disclaimer_h:
+            total += 40 + disclaimer_h
+    return total
+
+
+def _render_figma_brand_banner_by_size(
+    *,
+    bg_image: Optional[Image.Image],
+    size_key: str,
+    title: str,
+    subtitle: str,
+    disclaimer: str,
+    text_align: str = "left",
+    badge_enabled: bool = False,
+    badge_top_text: str = "",
+    badge_bottom_text: str = "",
+    accent_color: str = "#E3FF74",
+    badge_shift_x: int = 0,
+    badge_shift_y: int = 0,
+    image_scale: float = 1.0,
+    image_shift_x: int = 0,
+    image_shift_y: int = 0,
+    banner_language: str = "general",
+    brand: str = "yango",
+    logo_variant: str = "default",
+    layout_variant: str = "frame",
+) -> Image.Image:
+    width, height = BANNER_SIZE_MAP[size_key]
+    normalized_brand = _normalize_brand_key(brand)
+    is_go = normalized_brand == "yandex-go"
+    frame_theme = _resolve_frame_theme(normalized_brand, logo_variant, layout_variant)
+    bg_fill = frame_theme["bg"]
+    photo_fill = frame_theme["photo"]
+    text_fill = frame_theme["text"]
+    disclaimer_rgb = frame_theme["disclaimer"]
+    photo_mark_fill = frame_theme["photo_mark"]
+    mark_fill = frame_theme["mark"]
+    is_go_palette = bool(frame_theme["is_go_palette"])
+    canvas = Image.new("RGBA", (width, height), bg_fill)
+    draw = ImageDraw.Draw(canvas, "RGBA")
+
+    typography = _resolve_banner_typography(banner_language, brand=normalized_brand)
+    headline_font_path = typography["headline_font_path"]
+    text_bold_font_path = typography["text_bold_font_path"]
+    text_regular_font_path = typography["text_regular_font_path"]
+    font_scale = float(typography.get("font_scale", 1.0) or 1.0)
+
+    default_title = "Drive today\ncash in fast"
+    default_subtitle = "Join Yango, earn quickly, and drive your future"
+    default_disclaimer = (
+        "Yango is an informational service and not a transportation or taxi services provider. "
+        "Transportation services are provided by third parties."
+    )
+    title_value = str(title or "").strip() or default_title
+    subtitle_value = str(subtitle or "").strip()
+    disclaimer_value = str(disclaimer or "").strip() or default_disclaimer
+    title_display = title_value if is_go else title_value.upper()
+    align_mode = _normalize_text_align(text_align)
+    highlight_hex = _normalize_hex_color(accent_color, "#E3FF74")
+    is_icon_mark = _uses_brand_icon_layout(normalized_brand, logo_variant)
+    should_shadow_frame_icon = normalized_brand == "yango" and _frame_layout_tone(layout_variant) == "red" and is_icon_mark
+
+    def draw_badge(target_bottom_y: int) -> None:
+        if not badge_enabled:
+            return
+        _draw_price_badge(
+            canvas,
+            size_key=size_key,
+            top_text=badge_top_text,
+            bottom_text=badge_bottom_text,
+            text_align=align_mode,
+            headline_font_path=headline_font_path,
+            font_scale=font_scale,
+            badge_fill_hex=highlight_hex,
+            shift_right_px=max(0, int(badge_shift_x or 0)),
+            shift_up_px=max(0, int(badge_shift_y or 0)),
+            target_bottom_y=target_bottom_y,
+        )
+
+    if size_key == "1080x1920":
+        title_font = _load_font(headline_font_path, _scaled_font_size(132, font_scale))
+        subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(52, font_scale))
+        disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(16, font_scale))
+        content_x = 80
+        content_w = 920
+        text_stack_h = _measure_figma_text_stack(
+            draw,
+            title_text=title_display,
+            subtitle_text=subtitle_value,
+            disclaimer_text=disclaimer_value,
+            title_font=title_font,
+            subtitle_font=subtitle_font,
+            disclaimer_font=disclaimer_font,
+            content_width=content_w,
+            include_disclaimer=False,
+        )
+        mark_size = 184 if is_icon_mark else (136 if is_go_palette else 128)
+        mark_max_w = 440 if is_go_palette and not is_icon_mark else (mark_size if is_icon_mark else 360)
+        use_go_glyph_mark = _should_use_go_icon_glyph(normalized_brand, logo_variant, size_key)
+        go_glyph_mark = _load_yandex_go_icon_glyph("#000000", 164) if use_go_glyph_mark else None
+        if go_glyph_mark is not None:
+            mark_w, mark_h = go_glyph_mark.size
+        else:
+            mark_w, mark_h, _, _ = _measure_figma_brand_logo(
+                draw,
+                brand=normalized_brand,
+                logo_variant=logo_variant,
+                max_width=mark_max_w,
+                size=mark_size,
+                fill=mark_fill,
+            )
+        icon_disc_gap = 24
+        icon_disc_w = max(320, content_w - mark_w - icon_disc_gap)
+        disc_measure_w = icon_disc_w if is_icon_mark else content_w
+        disc_wrapped = _wrap_text_by_width(draw, disclaimer_value, disclaimer_font, disc_measure_w)
+        disc_h = _measure_multiline_with_ratio(draw, text=disc_wrapped, font=disclaimer_font, line_height_ratio=1.28)
+        mark_row_h = max(mark_h, disc_h)
+        mark_stack_h = mark_row_h if is_icon_mark else mark_h + 24 + disc_h
+        text_section_h = text_stack_h + 80 + mark_stack_h + 120
+        photo_y = 80
+        photo_h = max(420, height - text_section_h - photo_y)
+        title_y = photo_y + photo_h + 80
+        mark_y = title_y + text_stack_h + 80
+        _paste_rounded_cover(
+            canvas,
+            bg_image,
+            box=(40, photo_y, 1000, photo_h),
+            radius=56,
+            fallback_fill=photo_fill,
+            image_scale=image_scale,
+            image_shift_x=image_shift_x,
+            image_shift_y=image_shift_y,
+        )
+        draw_badge(title_y - 24)
+        _layout_bottom_blocks(
+            canvas,
+            draw,
+            x=content_x,
+            y=title_y,
+            width=content_w,
+            height=356,
+            valign="top",
+            blocks=[
+                {"text": title_display, "font": title_font, "ratio": 0.9, "fill": text_fill, "wrap_width": content_w, "align": align_mode},
+                {"text": subtitle_value, "font": subtitle_font, "ratio": 1.1, "fill": text_fill, "gap_before": 48, "wrap_width": content_w, "align": align_mode},
+            ],
+            highlight_hex=highlight_hex,
+        )
+        mark_row_y = mark_y
+        if is_icon_mark:
+            if align_mode == "right":
+                mark_x = content_x + content_w - mark_w
+                disc_x = content_x
+                disc_align = "right"
+            else:
+                mark_x = content_x
+                disc_x = mark_x + mark_w + icon_disc_gap
+                disc_align = "left"
+            disc_w = icon_disc_w
+            mark_draw_y = mark_row_y + mark_row_h - mark_h
+            disc_y = mark_row_y + mark_row_h - disc_h
+        else:
+            mark_x = _mark_x_for_align(
+                align_mode=align_mode,
+                container_x=content_x,
+                container_w=content_w,
+                mark_w=mark_w,
+                icon_left_when_center=False,
+            )
+            mark_draw_y = mark_y
+            disc_x = content_x
+            disc_w = content_w
+            disc_y = mark_y + mark_h + 24
+            disc_align = align_mode
+        if go_glyph_mark is not None:
+            canvas.alpha_composite(go_glyph_mark, (int(mark_x), int(mark_draw_y)))
+        else:
+            _draw_figma_brand_logo(
+                canvas,
+                draw,
+                brand=normalized_brand,
+                logo_variant=logo_variant,
+                x=mark_x,
+                y=mark_draw_y,
+                max_width=mark_max_w,
+                size=mark_size,
+                fill=mark_fill,
+                shadow=should_shadow_frame_icon,
+            )
+        _draw_multiline_with_ratio(
+            canvas,
+            draw,
+            x=disc_x,
+            y=disc_y,
+            text=disc_wrapped,
+            font=disclaimer_font,
+            fill=(*disclaimer_rgb, 204 if is_go_palette else 128),
+            line_height_ratio=1.28,
+            box_width=disc_w,
+            align=disc_align,
+            highlight_hex=highlight_hex,
+        )
+
+    elif size_key in {"1200x1350", "1200x1500"}:
+        title_font = _load_font(headline_font_path, _scaled_font_size(132, font_scale))
+        subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(52, font_scale))
+        disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(16, font_scale))
+        content_x = 80
+        content_w = 1040
+        text_stack_h = _measure_figma_text_stack(
+            draw,
+            title_text=title_display,
+            subtitle_text=subtitle_value,
+            disclaimer_text=disclaimer_value,
+            title_font=title_font,
+            subtitle_font=subtitle_font,
+            disclaimer_font=disclaimer_font,
+            content_width=content_w,
+            include_disclaimer=True,
+        )
+        photo_y = 40
+        text_top_pad = 80
+        text_bottom_pad = 40
+        photo_h = max(360, height - text_stack_h - text_top_pad - text_bottom_pad - photo_y)
+        text_y = photo_y + photo_h + text_top_pad
+        photo_box = (40, photo_y, 1120, photo_h)
+        _paste_rounded_cover(
+            canvas,
+            bg_image,
+            box=photo_box,
+            radius=56,
+            fallback_fill=photo_fill,
+            image_scale=image_scale,
+            image_shift_x=image_shift_x,
+            image_shift_y=image_shift_y,
+        )
+        _draw_rounded_vertical_gradient(canvas, box=photo_box, radius=56, from_top=True, gradient_height=300, opacity=150)
+        logo_size = 148 if is_icon_mark else (100 if is_go_palette else 92)
+        logo_max_w = 440 if is_go_palette and not is_icon_mark else (logo_size if is_icon_mark else 360)
+        logo_w, _, _, _ = _measure_figma_brand_logo(
+            draw,
+            brand=normalized_brand,
+            logo_variant=logo_variant,
+            max_width=logo_max_w,
+            size=logo_size,
+            fill=photo_mark_fill,
+        )
+        if align_mode == "right":
+            logo_x = width - 80 - logo_w
+        elif align_mode == "center" and not is_icon_mark:
+            logo_x = (width - logo_w) // 2
+        else:
+            logo_x = 80
+        _draw_figma_brand_logo(
+            canvas,
+            draw,
+            brand=normalized_brand,
+            logo_variant=logo_variant,
+            x=logo_x,
+            y=80,
+            max_width=logo_max_w,
+            size=logo_size,
+            fill=photo_mark_fill,
+            shadow=should_shadow_frame_icon,
+        )
+        draw_badge(text_y - 24)
+        _layout_bottom_blocks(
+            canvas,
+            draw,
+            x=content_x,
+            y=text_y,
+            width=content_w,
+            height=max(1, height - text_y - text_bottom_pad),
+            valign="top",
+            blocks=[
+                {"text": title_display, "font": title_font, "ratio": 0.9, "fill": text_fill, "wrap_width": content_w, "align": align_mode},
+                {"text": subtitle_value, "font": subtitle_font, "ratio": 1.1, "fill": text_fill, "gap_before": 48, "wrap_width": content_w, "align": align_mode},
+                {"text": disclaimer_value, "font": disclaimer_font, "ratio": 1.28, "fill": (*disclaimer_rgb, 128), "gap_before": 40, "wrap_width": content_w, "align": align_mode},
+            ],
+            highlight_hex=highlight_hex,
+        )
+
+    elif size_key == "1200x1200":
+        title_font = _load_font(headline_font_path, _scaled_font_size(132, font_scale))
+        subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(52, font_scale))
+        disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(16, font_scale))
+        content_x = 80
+        content_w = 1040
+        text_stack_h = _measure_figma_text_stack(
+            draw,
+            title_text=title_display,
+            subtitle_text=subtitle_value,
+            disclaimer_text=disclaimer_value,
+            title_font=title_font,
+            subtitle_font=subtitle_font,
+            disclaimer_font=disclaimer_font,
+            content_width=content_w,
+            include_disclaimer=True,
+        )
+        photo_y = 40
+        text_top_pad = 40
+        text_bottom_pad = 40
+        photo_h = max(300, height - text_stack_h - text_top_pad - text_bottom_pad - photo_y)
+        text_y = photo_y + photo_h + text_top_pad
+        photo_box = (40, photo_y, 1120, photo_h)
+        _paste_rounded_cover(
+            canvas,
+            bg_image,
+            box=photo_box,
+            radius=56,
+            fallback_fill=photo_fill,
+            image_scale=image_scale,
+            image_shift_x=image_shift_x,
+            image_shift_y=image_shift_y,
+        )
+        _draw_rounded_vertical_gradient(canvas, box=photo_box, radius=56, from_top=True, gradient_height=260, opacity=150)
+        logo_size = 148 if is_icon_mark else (100 if is_go_palette else 92)
+        logo_max_w = 440 if is_go_palette and not is_icon_mark else (logo_size if is_icon_mark else 360)
+        logo_w, _, _, _ = _measure_figma_brand_logo(
+            draw,
+            brand=normalized_brand,
+            logo_variant=logo_variant,
+            max_width=logo_max_w,
+            size=logo_size,
+            fill=photo_mark_fill,
+        )
+        if align_mode == "right":
+            logo_x = width - 80 - logo_w
+        elif align_mode == "center" and not is_icon_mark:
+            logo_x = (width - logo_w) // 2
+        else:
+            logo_x = 80
+        _draw_figma_brand_logo(
+            canvas,
+            draw,
+            brand=normalized_brand,
+            logo_variant=logo_variant,
+            x=logo_x,
+            y=80,
+            max_width=logo_max_w,
+            size=logo_size,
+            fill=photo_mark_fill,
+            shadow=should_shadow_frame_icon,
+        )
+        draw_badge(text_y - 24)
+        _layout_bottom_blocks(
+            canvas,
+            draw,
+            x=content_x,
+            y=text_y,
+            width=content_w,
+            height=max(1, height - text_y - text_bottom_pad),
+            valign="top",
+            blocks=[
+                {"text": title_display, "font": title_font, "ratio": 0.9, "fill": text_fill, "wrap_width": content_w, "align": align_mode},
+                {"text": subtitle_value, "font": subtitle_font, "ratio": 1.1, "fill": text_fill, "gap_before": 48, "wrap_width": content_w, "align": align_mode},
+                {"text": disclaimer_value, "font": disclaimer_font, "ratio": 1.28, "fill": (*disclaimer_rgb, 128), "gap_before": 40, "wrap_width": content_w, "align": align_mode},
+            ],
+            highlight_hex=highlight_hex,
+        )
+
+    elif size_key == "1200x628":
+        photo_box = (32, 32, 568, 564) if align_mode == "right" else (600, 32, 568, 564)
+        text_x = 632 if align_mode == "right" else 32
+        text_w = 536
+        _paste_rounded_cover(
+            canvas,
+            bg_image,
+            box=photo_box,
+            radius=40,
+            fallback_fill=photo_fill,
+            image_scale=image_scale,
+            image_shift_x=image_shift_x,
+            image_shift_y=image_shift_y,
+        )
+        _draw_rounded_vertical_gradient(canvas, box=photo_box, radius=40, from_top=False, gradient_height=180, opacity=160)
+        title_font = _load_font(headline_font_path, _scaled_font_size(96, font_scale))
+        subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(40, font_scale))
+        disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(14, font_scale))
+        if badge_enabled:
+            _draw_price_badge(
+                canvas,
+                size_key=size_key,
+                top_text=badge_top_text,
+                bottom_text=badge_bottom_text,
+                text_align=align_mode,
+                headline_font_path=headline_font_path,
+                font_scale=font_scale,
+                badge_fill_hex=highlight_hex,
+                shift_right_px=max(0, int(badge_shift_x or 0)),
+                shift_up_px=max(0, int(badge_shift_y or 0)),
+            )
+        _layout_bottom_blocks(
+            canvas,
+            draw,
+            x=text_x,
+            y=32,
+            width=text_w,
+            height=328,
+            valign="top",
+            blocks=[
+                {"text": title_display, "font": title_font, "ratio": 0.9, "fill": text_fill, "wrap_width": text_w, "align": align_mode},
+                {"text": subtitle_value, "font": subtitle_font, "ratio": 1.1, "fill": text_fill, "gap_before": 32, "wrap_width": text_w, "align": align_mode},
+            ],
+            highlight_hex=highlight_hex,
+        )
+        logo_size = 120 if is_icon_mark else (100 if is_go_palette else 96)
+        logo_max_w = 280 if is_go_palette and not is_icon_mark else (logo_size if is_icon_mark else 300)
+        use_go_glyph_mark = _should_use_go_icon_glyph(normalized_brand, logo_variant, size_key)
+        go_glyph_mark = _load_yandex_go_icon_glyph("#000000", 112) if use_go_glyph_mark else None
+        if go_glyph_mark is not None:
+            mark_w, mark_h = go_glyph_mark.size
+        else:
+            mark_w, mark_h, _, _ = _measure_figma_brand_logo(
+                draw,
+                brand=normalized_brand,
+                logo_variant=logo_variant,
+                max_width=logo_max_w,
+                size=logo_size,
+                fill=mark_fill,
+            )
+        disc_w = 512
+        disc_wrapped = _wrap_text_by_width(draw, disclaimer_value, disclaimer_font, disc_w)
+        disc_h = _measure_multiline_with_ratio(draw, text=disc_wrapped, font=disclaimer_font, line_height_ratio=1.28)
+        mark_y = height - 32 - mark_h
+        mark_x = _mark_x_for_align(
+            align_mode=align_mode,
+            container_x=text_x,
+            container_w=text_w,
+            mark_w=mark_w,
+            icon_left_when_center=is_icon_mark,
+        )
+        if go_glyph_mark is not None:
+            canvas.alpha_composite(go_glyph_mark, (int(mark_x), int(mark_y)))
+            mark_w, mark_h = go_glyph_mark.size
+        else:
+            mark_w, mark_h = _draw_figma_brand_logo(
+                canvas,
+                draw,
+                brand=normalized_brand,
+                logo_variant=logo_variant,
+                x=mark_x,
+                y=mark_y,
+                max_width=logo_max_w,
+                size=logo_size,
+                fill=mark_fill,
+                shadow=should_shadow_frame_icon,
+            )
+        if align_mode == "right":
+            disc_x = 64
+            disc_y = 596 - 28 - disc_h
+            disc_fill = (255, 255, 255, 210)
+            disc_align = "left"
+        else:
+            disc_x = 628
+            disc_y = 596 - 28 - disc_h
+            disc_fill = (255, 255, 255, 210)
+            disc_align = "right" if align_mode == "left" and not is_icon_mark else align_mode
+        _draw_multiline_with_ratio(
+            canvas,
+            draw,
+            x=disc_x,
+            y=disc_y,
+            text=disc_wrapped,
+            font=disclaimer_font,
+            fill=disc_fill,
+            line_height_ratio=1.28,
+            box_width=disc_w,
+            align=disc_align,
+            highlight_hex=highlight_hex,
+        )
+
+    return canvas.convert("RGB")
+
+
 def _render_master_banner_by_size(
     *,
     bg_image: Optional[Image.Image],
@@ -3695,6 +4518,29 @@ def _render_master_banner_by_size(
     brand: str = "yango",
     logo_variant: str = "default",
 ) -> Image.Image:
+    if _is_frame_layout_variant(layout_variant) and _normalize_brand_key(brand) in {"yango", "yango-pro", "yandex-go", "yango-drive"}:
+        return _render_figma_brand_banner_by_size(
+            bg_image=bg_image,
+            size_key=size_key,
+            title=title,
+            subtitle=subtitle,
+            disclaimer=disclaimer,
+            text_align=text_align,
+            badge_enabled=badge_enabled,
+            badge_top_text=badge_top_text,
+            badge_bottom_text=badge_bottom_text,
+            accent_color=accent_color,
+            badge_shift_x=badge_shift_x,
+            badge_shift_y=badge_shift_y,
+            image_scale=image_scale,
+            image_shift_x=image_shift_x,
+            image_shift_y=image_shift_y,
+            banner_language=banner_language,
+            brand=brand,
+            logo_variant=logo_variant,
+            layout_variant=layout_variant,
+        )
+
     width, height = BANNER_SIZE_MAP[size_key]
     canvas = Image.new("RGBA", (width, height), "#d9d9d9")
     draw = ImageDraw.Draw(canvas, "RGBA")
@@ -3703,6 +4549,7 @@ def _render_master_banner_by_size(
     show_gradients = variant == "photo"
     main_text_fill = "#000000" if variant == "black" else "white"
     disclaimer_rgb = (0, 0, 0) if variant == "black" else (255, 255, 255)
+    disclaimer_alpha = 160 if variant in {"black", "white"} else 77
 
     typography = _resolve_banner_typography(banner_language, brand=brand)
     headline_font_path = typography["headline_font_path"]
@@ -3823,9 +4670,7 @@ def _render_master_banner_by_size(
 
         if _uses_brand_icon_layout(brand, logo_variant):
             icon_size = 164
-            if align_mode == "center":
-                icon_x = (width - icon_size) // 2
-            elif align_mode == "right":
+            if align_mode == "right":
                 icon_x = width - 80 - icon_size
             else:
                 icon_x = 80
@@ -3882,7 +4727,7 @@ def _render_master_banner_by_size(
                     "font": subtitle_font,
                     "ratio": 1.1,
                     "fill": main_text_fill,
-                    "gap_before": 48,
+                    "gap_before": 32,
                     "wrap_width": 1033 if align_mode in {"center", "right"} else 1040,
                     "align": align_mode,
                 },
@@ -3890,7 +4735,7 @@ def _render_master_banner_by_size(
                     "text": disclaimer_text,
                     "font": disclaimer_font,
                     "ratio": 1.28,
-                    "fill": (*disclaimer_rgb, 77),
+                    "fill": (*disclaimer_rgb, disclaimer_alpha),
                     "gap_before": 40,
                     "wrap_width": 1040,
                     "align": align_mode,
@@ -3900,7 +4745,7 @@ def _render_master_banner_by_size(
             highlight_hex=accent_hex,
         )
 
-    elif size_key == "1200x1350":
+    elif size_key in {"1200x1350", "1200x1500"}:
         # Updated image transform from Figma node 145:427 (1200x1500 composition).
         img_x, img_y, img_w, img_h = -600, -310, 2400, 1810
         img_x, img_y, img_w, img_h = _transform_with_scale_and_shift(
@@ -3996,9 +4841,7 @@ def _render_master_banner_by_size(
 
         if _uses_brand_icon_layout(brand, logo_variant):
             icon_size = 164
-            if align_mode == "center":
-                icon_x = (width - icon_size) // 2
-            elif align_mode == "right":
+            if align_mode == "right":
                 icon_x = width - 80 - icon_size
             else:
                 icon_x = 80
@@ -4055,7 +4898,7 @@ def _render_master_banner_by_size(
                     "font": subtitle_font,
                     "ratio": 1.1,
                     "fill": main_text_fill,
-                    "gap_before": 48,
+                    "gap_before": 32,
                     "wrap_width": 1033 if align_mode in {"center", "right"} else 1040,
                     "align": align_mode,
                 },
@@ -4063,7 +4906,7 @@ def _render_master_banner_by_size(
                     "text": disclaimer_text,
                     "font": disclaimer_font,
                     "ratio": 1.28,
-                    "fill": (*disclaimer_rgb, 77),
+                    "fill": (*disclaimer_rgb, disclaimer_alpha),
                     "gap_before": 40,
                     "wrap_width": 1040,
                     "align": align_mode,
@@ -4151,9 +4994,7 @@ def _render_master_banner_by_size(
         if _uses_brand_icon_layout(brand, logo_variant):
             icon_size = 112
             icon_y = height - bottom_padding - icon_size
-            if align_mode == "center":
-                icon_x = 32 + (636 - icon_size) // 2
-            elif align_mode == "right":
+            if align_mode == "right":
                 icon_x = width - 32 - icon_size
             else:
                 icon_x = 32
@@ -4238,21 +5079,14 @@ def _render_master_banner_by_size(
         disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(16, banner_font_scale))
 
         if _uses_brand_icon_layout(brand, logo_variant):
-            content_width = 820
-            if align_mode == "center":
-                content_x = (width - content_width) // 2
-            elif align_mode == "right":
-                content_x = width - 80 - content_width
-            else:
-                content_x = 80
+            content_x = 80
+            content_width = 920
 
             title_width = content_width
             subtitle_width = content_width
             icon_size = 164
-            icon_y = height - 80 - icon_size
-            icon_x = content_x
-            disclaimer_width = content_width - icon_size - 24
-            disclaimer_x = icon_x + icon_size + 24
+            icon_disc_gap = 24
+            disclaimer_width = content_width - icon_size - icon_disc_gap
             has_subtitle = bool(subtitle_text.strip())
             title_wrapped = _wrap_text_by_width(draw, title_display_text, title_font, title_width)
             subtitle_wrapped = _wrap_text_by_width(draw, subtitle_text, subtitle_font, subtitle_width) if has_subtitle else ""
@@ -4269,8 +5103,20 @@ def _render_master_banner_by_size(
 
             gap_title_subtitle = 48
             gap_subtitle_icon = 80
+            row_h = max(icon_size, disclaimer_h)
+            row_y = height - 80 - row_h
+            if align_mode == "right":
+                icon_x = width - 80 - icon_size
+                disclaimer_x = content_x
+                disclaimer_align = "right"
+            else:
+                icon_x = content_x
+                disclaimer_x = icon_x + icon_size + icon_disc_gap
+                disclaimer_align = "left"
+            icon_y = row_y + row_h - icon_size
+            disclaimer_y = row_y + row_h - disclaimer_h
             text_h = title_h + (gap_title_subtitle if has_subtitle else 0) + subtitle_h
-            cursor_y = icon_y - gap_subtitle_icon - text_h
+            cursor_y = row_y - gap_subtitle_icon - text_h
             if badge_enabled:
                 _draw_price_badge(
                     canvas,
@@ -4323,13 +5169,13 @@ def _render_master_banner_by_size(
                 canvas,
                 draw,
                 x=disclaimer_x,
-                y=int(icon_y + icon_size - disclaimer_h),
+                y=int(disclaimer_y),
                 text=disclaimer_wrapped,
                 font=disclaimer_font,
                 fill=(*disclaimer_rgb, 204),
                 line_height_ratio=1.28,
                 box_width=disclaimer_width,
-                align="left",
+                align=disclaimer_align,
                 highlight_hex=accent_hex,
             )
         else:
@@ -4445,7 +5291,7 @@ def _render_master_banner_by_size(
                 y=int(cursor_y),
                 text=disclaimer_wrapped,
                 font=disclaimer_font,
-                fill=(*disclaimer_rgb, 77),
+                fill=(*disclaimer_rgb, disclaimer_alpha),
                 line_height_ratio=1.28,
                 box_width=disclaimer_width,
                 align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
@@ -4557,7 +5403,7 @@ def render_banner_images(
             render_image_shift_x = int(override.get("image_shift_x", image_shift_x))
             render_image_shift_y = int(override.get("image_shift_y", image_shift_y))
 
-            if normalized_layout not in {"photo", "black", "white"}:
+            if normalized_layout not in {"photo", "black", "white"} and not _is_frame_layout_variant(normalized_layout):
                 normalized_layout = "photo"
             banner = _render_master_banner_by_size(
                 bg_image=source_image,

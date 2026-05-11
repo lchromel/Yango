@@ -96,6 +96,17 @@ const BANNER_LAYOUTS = [
   { label: "Black", value: "black", disabled: false },
   { label: "White", value: "white", disabled: false },
 ];
+const STANDARD_BANNER_LAYOUTS = [...BANNER_LAYOUTS];
+const YANGO_FRAME_LAYOUTS = [
+  { label: "Frame Grey", value: "frame", disabled: false },
+  { label: "Frame Red", value: "frame-red", disabled: false },
+  { label: "Frame Black", value: "frame-black", disabled: false },
+];
+const GO_FRAME_LAYOUTS = [
+  { label: "Frame Yellow", value: "frame", disabled: false },
+  { label: "Frame Black", value: "frame-black", disabled: false },
+  { label: "Frame White", value: "frame-white", disabled: false },
+];
 const BANNER_LOGO_LAYOUT_OPTIONS = [
   { label: "Logo", value: "default" },
   { label: "Icon", value: "icon" },
@@ -118,11 +129,14 @@ const BANNER_SIZES = [
   { value: "1200x628", slotClass: "slot-1200x628" },
   { value: "1080x1920", slotClass: "slot-1080x1920" },
   { value: "1200x1350", slotClass: "slot-1200x1350" },
+  { value: "1200x1500", slotClass: "slot-1200x1500" },
 ];
 const BANNER_SIZE_LABELS = BANNER_SIZES.reduce((acc, item) => {
   acc[item.value] = item.value;
   return acc;
 }, {});
+const STANDARD_BANNER_SIZES = ["1200x1200", "1200x1350", "1200x628", "1080x1920"];
+const FRAME_BANNER_SIZES = ["1200x1200", "1200x1500", "1200x628", "1080x1920"];
 const BRANDING_REFERENCES = {
   amharic: "./assets/branding/amharic.png",
   azerbaijani: "./assets/branding/azerbaijani.png",
@@ -164,6 +178,9 @@ const BUSINESS_CLASS_KEYWORDS = ["business", "premier", "elite"];
 const IMAGE_SHIFT_STEP_COUNT = 8;
 const IMAGE_SHIFT_MAX_PX = 400;
 const IMAGE_SHIFT_ONE_STEP_PX = IMAGE_SHIFT_MAX_PX / IMAGE_SHIFT_STEP_COUNT;
+const FRAME_IMAGE_SHIFT_STEP_COUNT = 12;
+const FRAME_IMAGE_SHIFT_MAX_PX = 900;
+const FRAME_IMAGE_SHIFT_ONE_STEP_PX = FRAME_IMAGE_SHIFT_MAX_PX / FRAME_IMAGE_SHIFT_STEP_COUNT;
 const IMAGE_SCALE_MIN = 100;
 const IMAGE_SCALE_MAX = 150;
 const IMAGE_SCALE_STEP = 3;
@@ -1841,31 +1858,102 @@ function renderImageControls() {
 
 function renderLayoutTypes() {
   layoutTypeRowEl.innerHTML = "";
+  const stack = document.createElement("div");
+  stack.className = "layout-type-stack";
+  const rows = [STANDARD_BANNER_LAYOUTS, usesYandexGoFramePalette() ? GO_FRAME_LAYOUTS : YANGO_FRAME_LAYOUTS];
+  rows.forEach((layouts) => {
+    const layoutGroup = document.createElement("div");
+    layoutGroup.className = "layout-type-group";
+    layouts.forEach((layout) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "angle-chip";
+      chip.textContent = layout.label;
+      if (layout.disabled) {
+        chip.disabled = true;
+        chip.classList.add("is-disabled");
+      }
+      if (state.bannerLayout === layout.value) chip.classList.add("is-active");
+      chip.addEventListener("click", () => {
+        if (layout.disabled) return;
+        state.bannerLayout = layout.value;
+        invalidateRenderedBanners();
+        renderLayoutTypes();
+        renderBannerMarkSelector();
+        renderShiftControls();
+        renderBannerSetsView();
+        renderTopAction();
+      });
+      layoutGroup.appendChild(chip);
+    });
+    stack.appendChild(layoutGroup);
+  });
+
+  layoutTypeRowEl.appendChild(stack);
+}
+
+function supportsBannerIconLayout(brand = state.bannerBrand) {
+  const normalizedBrand = String(brand || "").trim().toLowerCase();
+  return ["yango", "yango-pro", "yandex-go"].includes(normalizedBrand);
+}
+
+function supportsBannerMarkControls(brand = state.bannerBrand) {
+  const normalizedBrand = String(brand || "").trim().toLowerCase();
+  return ["yango", "yango-pro", "yandex-go", "yango-drive"].includes(normalizedBrand);
+}
+
+function usesYandexGoFramePalette(brand = state.bannerBrand, logoVariant = state.bannerLogoVariant) {
+  const normalizedBrand = String(brand || "").trim().toLowerCase();
+  const normalizedLogo = String(logoVariant || "").trim().toLowerCase();
+  return normalizedBrand === "yandex-go" || (normalizedBrand === "yango-drive" && normalizedLogo && normalizedLogo !== "default" && normalizedLogo !== "icon");
+}
+
+function isFrameLayout(layout = state.bannerLayout) {
+  return String(layout || "").trim().toLowerCase().startsWith("frame");
+}
+
+function normalizeFrameLayoutForCurrentPalette() {
+  if (!isFrameLayout()) return;
+  if (usesYandexGoFramePalette()) {
+    if (state.bannerLayout === "frame-red") state.bannerLayout = "frame-white";
+    return;
+  }
+  if (state.bannerLayout === "frame-white") state.bannerLayout = "frame-red";
+}
+
+function renderBannerMarkSelector() {
+  if (bannerMarkSectionEl) {
+    bannerMarkSectionEl.classList.toggle("hidden", !supportsBannerMarkControls(state.bannerBrand));
+  }
+  if (!bannerMarkRowEl) return;
+  bannerMarkRowEl.innerHTML = "";
+  if (!supportsBannerMarkControls(state.bannerBrand)) return;
+
   const row = document.createElement("div");
   row.className = "layout-accent-row";
-
-  const layoutGroup = document.createElement("div");
-  layoutGroup.className = "layout-type-group";
-  BANNER_LAYOUTS.forEach((layout) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "angle-chip";
-    chip.textContent = layout.label;
-    if (layout.disabled) {
-      chip.disabled = true;
-      chip.classList.add("is-disabled");
-    }
-    if (state.bannerLayout === layout.value) chip.classList.add("is-active");
-    chip.addEventListener("click", () => {
-      if (layout.disabled) return;
-      state.bannerLayout = layout.value;
-      invalidateRenderedBanners();
-      renderLayoutTypes();
-      renderBannerSetsView();
-      renderTopAction();
+  const markGroup = document.createElement("div");
+  markGroup.className = "layout-type-group";
+  const normalizedLogoLayout = state.bannerLogoVariant === "icon" ? "icon" : "default";
+  if (supportsBannerIconLayout(state.bannerBrand)) {
+    BANNER_LOGO_LAYOUT_OPTIONS.forEach((optionDef) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "angle-chip";
+      chip.textContent = optionDef.label;
+      if (normalizedLogoLayout === optionDef.value) chip.classList.add("is-active");
+      chip.addEventListener("click", () => {
+        state.bannerLogoVariant = optionDef.value;
+        normalizeFrameLayoutForCurrentPalette();
+        invalidateRenderedBanners();
+        renderLayoutTypes();
+        renderBannerMarkSelector();
+        renderBannerLogoSelector();
+        renderBannerSetsView();
+        renderTopAction();
+      });
+      markGroup.appendChild(chip);
     });
-    layoutGroup.appendChild(chip);
-  });
+  }
 
   const accentGroup = document.createElement("div");
   accentGroup.className = "layout-accent-group";
@@ -1889,7 +1977,7 @@ function renderLayoutTypes() {
       if (isCustomTrigger) {
         state.bannerAccentPreset = "red";
         invalidateRenderedBanners();
-        renderLayoutTypes();
+        renderBannerMarkSelector();
         renderBannerSetsView();
         renderTopAction();
         registerCustomAccentTap();
@@ -1898,48 +1986,16 @@ function renderLayoutTypes() {
       resetCustomAccentTapSequence();
       state.bannerAccentPreset = key;
       invalidateRenderedBanners();
-      renderLayoutTypes();
+      renderBannerMarkSelector();
       renderBannerSetsView();
       renderTopAction();
     });
     accentGroup.appendChild(btn);
   });
 
-  row.appendChild(layoutGroup);
+  if (markGroup.childElementCount) row.appendChild(markGroup);
   row.appendChild(accentGroup);
-  layoutTypeRowEl.appendChild(row);
-}
-
-function supportsBannerIconLayout(brand = state.bannerBrand) {
-  const normalizedBrand = String(brand || "").trim().toLowerCase();
-  return ["yango", "yango-pro", "yandex-go"].includes(normalizedBrand);
-}
-
-function renderBannerMarkSelector() {
-  if (bannerMarkSectionEl) {
-    bannerMarkSectionEl.classList.toggle("hidden", !supportsBannerIconLayout(state.bannerBrand));
-  }
-  if (!bannerMarkRowEl) return;
-  bannerMarkRowEl.innerHTML = "";
-  if (!supportsBannerIconLayout(state.bannerBrand)) return;
-
-  const normalizedLogoLayout = state.bannerLogoVariant === "icon" ? "icon" : "default";
-  BANNER_LOGO_LAYOUT_OPTIONS.forEach((optionDef) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "angle-chip";
-    chip.textContent = optionDef.label;
-    if (normalizedLogoLayout === optionDef.value) chip.classList.add("is-active");
-    chip.addEventListener("click", () => {
-      state.bannerLogoVariant = optionDef.value;
-      invalidateRenderedBanners();
-      renderBannerMarkSelector();
-      renderBannerLogoSelector();
-      renderBannerSetsView();
-      renderTopAction();
-    });
-    bannerMarkRowEl.appendChild(chip);
-  });
+  bannerMarkRowEl.appendChild(row);
 }
 
 function renderBrandSelector(rowEl, selectedBrand, onSelect, options = {}) {
@@ -1995,11 +2051,13 @@ function renderBannerBrandSelector() {
     state.bannerLogoVariant = value === "yango-drive"
       ? "default"
       : normalizeBannerLogoVariantForBrand(value, state.bannerLogoVariant);
+    normalizeFrameLayoutForCurrentPalette();
     state.sourceLibraryCountry = "";
     state.sourceLibraryCountryMenuOpen = false;
     clearBannerSourceIfBrandMismatch();
     invalidateRenderedBanners();
     renderBannerBrandSelector();
+    renderLayoutTypes();
     renderBannerMarkSelector();
     renderBannerLogoSelector();
     renderSelectedSource();
@@ -2026,7 +2084,10 @@ function renderBannerLogoSelector() {
     if (state.bannerLogoVariant === optionDef.value) chip.classList.add("is-active");
     chip.addEventListener("click", () => {
       state.bannerLogoVariant = optionDef.value;
+      normalizeFrameLayoutForCurrentPalette();
       invalidateRenderedBanners();
+      renderLayoutTypes();
+      renderBannerMarkSelector();
       renderBannerLogoSelector();
       renderBannerSetsView();
       renderTopAction();
@@ -2053,6 +2114,12 @@ function renderVideoBrandSelector() {
 
 function renderShiftControls() {
   const values = getActiveImagePositionValues();
+  const shiftStepCount = getImageShiftStepCount();
+  [imageShiftXEl, imageShiftYEl].forEach((inputEl) => {
+    if (!inputEl) return;
+    inputEl.min = String(-shiftStepCount);
+    inputEl.max = String(shiftStepCount);
+  });
   if (imageScaleEl) imageScaleEl.value = String(values.imageScalePercent);
   if (imageShiftXEl) imageShiftXEl.value = String(values.imageShiftXStep);
   if (imageShiftYEl) imageShiftYEl.value = String(values.imageShiftYStep);
@@ -2179,12 +2246,21 @@ function markImagePositionChanged() {
   renderTopAction();
 }
 
+function getImageShiftStepCount() {
+  return isFrameLayout() ? FRAME_IMAGE_SHIFT_STEP_COUNT : IMAGE_SHIFT_STEP_COUNT;
+}
+
+function getImageShiftOneStepPx() {
+  return isFrameLayout() ? FRAME_IMAGE_SHIFT_ONE_STEP_PX : IMAGE_SHIFT_ONE_STEP_PX;
+}
+
 function clampShiftStep(stepValue) {
-  return Math.max(-IMAGE_SHIFT_STEP_COUNT, Math.min(IMAGE_SHIFT_STEP_COUNT, stepValue));
+  const shiftStepCount = getImageShiftStepCount();
+  return Math.max(-shiftStepCount, Math.min(shiftStepCount, stepValue));
 }
 
 function stepToShiftPx(stepValue) {
-  return Math.round(clampShiftStep(stepValue) * IMAGE_SHIFT_ONE_STEP_PX);
+  return Math.round(clampShiftStep(stepValue) * getImageShiftOneStepPx());
 }
 
 function applySliderFill(inputEl) {
@@ -2459,6 +2535,10 @@ function buildSetBannerMap() {
   return map;
 }
 
+function getActiveBannerSizes() {
+  return isFrameLayout() ? FRAME_BANNER_SIZES : STANDARD_BANNER_SIZES;
+}
+
 function makeSlot(size, url, isLoading, setIndex = 0) {
   const slot = document.createElement("div");
   const key = makeBannerPositionKey(setIndex, size);
@@ -2526,6 +2606,8 @@ function downloadSingleSet(setIndex) {
 function renderBannerSetsView() {
   bannerSetsViewEl.innerHTML = "";
   const map = buildSetBannerMap();
+  const activeSizes = getActiveBannerSizes();
+  const largeSize = activeSizes.includes("1200x1500") ? "1200x1500" : "1200x1350";
 
   state.bannerTextSets.forEach((_, index) => {
     const wrap = document.createElement("section");
@@ -2550,7 +2632,7 @@ function renderBannerSetsView() {
 
     const right = document.createElement("div");
     right.className = "banner-col-right";
-    right.appendChild(makeSlot("1200x1350", map.get(`${index}:1200x1350`), state.bannerRendering, index));
+    right.appendChild(makeSlot(largeSize, map.get(`${index}:${largeSize}`), state.bannerRendering, index));
 
     const actions = document.createElement("div");
     actions.className = "banner-set-actions";
@@ -2833,7 +2915,7 @@ function buildRenderPayload() {
     layoutType: state.bannerLayout,
     brand: state.bannerBrand,
     logoVariant: normalizeBannerLogoVariantForBrand(state.bannerBrand, state.bannerLogoVariant),
-    sizes: ["1200x1200", "1200x1350", "1200x628", "1080x1920"],
+    sizes: getActiveBannerSizes(),
     bannerImageOverrides,
   };
 }
@@ -3259,7 +3341,7 @@ if (bannerAccentColorInput) {
     state.bannerAccentPreset = "custom";
     state.bannerAccentCustomColor = event.target.value || ACCENT_PRESET_VALUES.lime;
     invalidateRenderedBanners();
-    renderLayoutTypes();
+    renderBannerMarkSelector();
     renderBannerSetsView();
     renderTopAction();
   });
