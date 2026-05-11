@@ -898,9 +898,12 @@ body {
 }
 
 .image-preview-frame {
-  width: 100%;
+  --preview-ratio: 1.333333;
+  --preview-aspect-ratio: 4 / 3;
+  width: min(100%, calc((100vh - 190px) * var(--preview-ratio)));
   max-width: 900px;
-  aspect-ratio: 4 / 3;
+  max-height: calc(100vh - 190px);
+  aspect-ratio: var(--preview-aspect-ratio);
   border: 1px solid var(--soft-line);
   background: transparent;
   margin: 0 auto;
@@ -1517,6 +1520,11 @@ body {
   .canvas {
     margin-left: 0;
     min-height: 640px;
+  }
+
+  .image-preview-frame {
+    width: 100%;
+    max-height: none;
   }
 
   .banner-set-grid {

@@ -447,6 +447,10 @@ let bannerAutoRenderTimer = null;
 let customAccentTapCount = 0;
 let customAccentTapTimer = null;
 
+if (resultImageEl) {
+  resultImageEl.addEventListener("load", updateImagePreviewAspectRatio);
+}
+
 function resetCustomAccentTapSequence() {
   customAccentTapCount = 0;
   if (customAccentTapTimer) {
@@ -1407,6 +1411,19 @@ function invalidateRenderedBanners(resetAutoRenderEligibility = true) {
   }
 }
 
+function updateImagePreviewAspectRatio() {
+  if (!imagePreviewFrameEl) return;
+  const width = Number(resultImageEl?.naturalWidth || 0);
+  const height = Number(resultImageEl?.naturalHeight || 0);
+  if (!width || !height) {
+    imagePreviewFrameEl.style.setProperty("--preview-ratio", "1.333333");
+    imagePreviewFrameEl.style.setProperty("--preview-aspect-ratio", "4 / 3");
+    return;
+  }
+  imagePreviewFrameEl.style.setProperty("--preview-ratio", String(width / height));
+  imagePreviewFrameEl.style.setProperty("--preview-aspect-ratio", `${width} / ${height}`);
+}
+
 function renderUiState() {
   const isBusy = state.generating || state.bannerRendering || state.videoGenerating || state.videoRendering;
   const isEditStyle = state.selectedImageStyle === "edit";
@@ -1451,7 +1468,15 @@ function renderUiState() {
   renderEditSource();
   renderFaceReference();
   imagePreviewFrameEl.classList.remove("hidden");
-  resultImageEl.src = state.imageUrl || "";
+  const nextImageUrl = state.imageUrl || "";
+  if (resultImageEl.getAttribute("src") !== nextImageUrl) {
+    resultImageEl.src = nextImageUrl;
+  }
+  if (!nextImageUrl) {
+    updateImagePreviewAspectRatio();
+  } else if (resultImageEl.complete) {
+    updateImagePreviewAspectRatio();
+  }
   resultImageEl.classList.toggle("hidden", !state.imageUrl);
   promptRowEl.classList.toggle("hidden", !state.imageUrl);
   if (quickActionRowEl) {
