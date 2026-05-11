@@ -8,6 +8,7 @@ const IMAGE_STYLES = [
 ];
 const IMAGE_REQUEST_TIMEOUT_MS = 8 * 60 * 1000;
 const DRIVE_COUNTRY_CITY_OPTIONS = [
+  { country: "UAE", cities: ["Abu Dhabi", "Dubai", "Sharjah"] },
   { country: "Kazakhstan", cities: ["Astana", "Almaty"] },
   { country: "Georgia", cities: ["Tbilisi", "Batumi"] },
   { country: "Serbia", cities: ["Belgrade"] },

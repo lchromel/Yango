@@ -332,6 +332,61 @@ ANGLE_RULES = {
     ),
 }
 
+DRIVE_LOCATION_GUIDES = {
+    ("uae", "abu dhabi"): (
+        "Abu Dhabi, UAE: premium Gulf capital roads, broad dry boulevards, clean asphalt, pale stone curbs, "
+        "mangrove/coastal or Etihad Towers-style modern architecture only when composition fits, warm clear UAE daylight."
+    ),
+    ("uae", "dubai"): (
+        "Dubai, UAE: premium dry roads, clean modern towers or villa districts, palms, pale concrete, warm Gulf daylight, "
+        "Dubai Marina, Jumeirah, business district, desert-edge roads, or polished urban road context matched to the car."
+    ),
+    ("uae", "sharjah"): (
+        "Sharjah, UAE: dry Gulf city roads, cultural stone architecture, clean urban avenues, warm daylight, "
+        "low-rise civic buildings, palm-lined streets, and realistic Emirati road surfaces."
+    ),
+    ("kazakhstan", "astana"): (
+        "Astana, Kazakhstan: wide dry capital boulevards, futuristic glass-and-steel architecture, pale stone civic spaces, "
+        "open steppe light, crisp continental atmosphere, clean lane markings, and modern urban scale."
+    ),
+    ("kazakhstan", "almaty"): (
+        "Almaty, Kazakhstan: leafy city streets, mountain foothill atmosphere, modern cafes and mid-rise facades, "
+        "dry asphalt, visible road markings, and subtle Tian Shan mountain context only if naturally framed."
+    ),
+    ("georgia", "tbilisi"): (
+        "Tbilisi, Georgia: hilly dry streets, stone walls, balconies, old-meets-new city texture, warm Caucasus daylight, "
+        "curving roads, compact urban facades, and authentic road surfaces."
+    ),
+    ("georgia", "batumi"): (
+        "Batumi, Georgia: Black Sea boulevard mood, dry coastal roads, modern glass towers mixed with seaside promenade details, "
+        "palms, humid coastal light without wet roads, and clean lane direction."
+    ),
+    ("serbia", "belgrade"): (
+        "Belgrade, Serbia: dry European city avenues, concrete and stone facades, tramline or boulevard context when appropriate, "
+        "Danube/Sava urban atmosphere, practical road markings, and mature street trees."
+    ),
+    ("belarus", "minsk"): (
+        "Minsk, Belarus: broad dry avenues, orderly post-Soviet and modern architecture, clean asphalt, pale civic facades, "
+        "green medians, crisp northern daylight, and structured lane markings."
+    ),
+    ("turkey", "antalya"): (
+        "Antalya, Turkey: dry Mediterranean roads, palm-lined boulevards, coastal light, limestone textures, resort-city facades, "
+        "mountain hints only if naturally visible, and clean sunlit asphalt."
+    ),
+    ("turkey", "ankara"): (
+        "Ankara, Turkey: dry capital boulevards, modern government/business district architecture, Anatolian city light, "
+        "structured urban roads, clean asphalt, and restrained civic scale."
+    ),
+    ("turkey", "izmir"): (
+        "Izmir, Turkey: dry Aegean coastal city roads, seaside boulevard context, palm or waterfront details, warm but not sunset light, "
+        "modern apartment facades, and clean lane markings."
+    ),
+    ("turkey", "istanbul"): (
+        "Istanbul, Turkey: dry urban roads with Bosphorus-side or historic-modern city texture, stone walls, bridges or waterfront cues "
+        "only when physically plausible, dense street scale, and correct lane perspective."
+    ),
+}
+
 
 def is_basic_auth_enabled() -> bool:
     return bool(WEB_APP_BASIC_AUTH_USERNAME and WEB_APP_BASIC_AUTH_PASSWORD)
@@ -793,6 +848,17 @@ def _brand_logo_text(brand: str) -> str:
     return BRAND_LOGO_TEXT_BY_KEY.get(_normalize_brand_key(brand), BRAND_LOGO_TEXT)
 
 
+def _drive_location_guide(country: str, city: str) -> str:
+    key = (str(country or "").strip().lower(), str(city or "").strip().lower())
+    if key in DRIVE_LOCATION_GUIDES:
+        return DRIVE_LOCATION_GUIDES[key]
+    location_name = ", ".join(part for part in [str(city or "").strip(), str(country or "").strip()] if part)
+    return (
+        f"{location_name or 'the selected city'}: use authentic local roads, architecture, climate, road markings, "
+        "street materials, vegetation, and daylight from this place. Do not substitute Dubai or generic UAE context."
+    )
+
+
 def _default_vehicle_color(vehicle_type: str) -> str:
     vehicle_type = (vehicle_type or "car").strip().lower()
     if vehicle_type in {"moto", "tuktuk"}:
@@ -967,8 +1033,80 @@ def call_yango_drive_openai(
     except Exception:
         request.vehicle_profile = infer_vehicle_profile_from_keywords(request)
 
+    car_descriptor = (request.car_with_year or request.car).strip()
+    vehicle_profile = (request.vehicle_profile or "urban").strip()
+    location_name = ", ".join(part for part in [city.strip(), country.strip()] if part) or "the selected city"
+    location_guide = _drive_location_guide(country, city)
+    color = color_name.strip() or "white"
+    angle_instruction = angle_rules or "Choose a bold premium automotive angle that fits the road geometry."
     _ = color_hex
-    return generate_prompt_with_openai(request)
+
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    user_prompt = f"""
+Create one detailed structured image prompt for Recraft v4.
+
+Selected inputs:
+- Brand/style: Yango Drive premium car-rental automotive visual
+- Car: {car_descriptor}
+- Color: {color}
+- Vehicle profile: {vehicle_profile}
+- Country: {country or "not specified"}
+- City: {city or "not specified"}
+- Required location: {location_name}
+- Preferred angle label: {angle_label or "auto"}
+- Preferred angle instructions: {angle_instruction}
+
+Location guide:
+{location_guide}
+
+Use this exact section format and section order:
+Prompt Structure
+FORMAT + MEDIUM
+SUBJECT
+CAMERA + FRAMING
+SCENE + SETTING
+MICRO-DETAILS
+EXPRESSION + ACTION
+LIGHTING
+NEGATIVE CUES
+
+Requirements:
+- Output only the final prompt text, no explanations.
+- The scene must be unmistakably set in {location_name}, not Dubai unless the selected city is Dubai.
+- Use authentic local architecture, road surfaces, curbs, lane markings, vegetation, climate, daylight, and nearby street details for the selected city.
+- Never mention Dubai, UAE, Gulf, desert haze, palms, villas, Dubai Marina, Jumeirah, or Sheikh Zayed Road unless the selected city/country is in UAE and the detail is physically appropriate.
+- Keep it as a premium realistic automotive commercial, expensive and believable, with Fujifilm GFX100 commercial photography language.
+- Keep the main subject strictly the car. Do not add drivers, passengers, app UI, logos, readable text, or watermarks.
+- Always include the exact car with latest body-year naming in the final prompt.
+- Always use the selected car color.
+- Follow the preferred angle exactly if one is provided.
+- Vehicle heading must align with road direction and lane perspective.
+- Always include visible road markings or guidance lines appropriate to the selected city's road type.
+- Roads and pavement must be dry: no puddles, no wet road, no rain residue, no reflective water patches.
+- Do not use sunset or orange golden-hour lighting. Prefer early morning, late morning, midday, late afternoon before sunset, or blue-hour / early evening light.
+- Build environment effects from the selected city only. Dust/sand appears only where the local terrain logically supports it.
+- Make the camera angle unusual, bold, and commercially powerful, avoiding generic eye-level catalog shots.
+"""
+
+    response = client.responses.create(
+        model=model,
+        input=[
+            {
+                "role": "system",
+                "content": (
+                    "You write production-ready prompts for Recraft v4 automotive image generation. "
+                    "The most important rule is geographic fidelity: the selected country and city override all prior/default location habits. "
+                    "Return only the final structured prompt text."
+                ),
+            },
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    prompt = (response.output_text or "").strip()
+    if not prompt:
+        raise RuntimeError("OpenAI returned an empty response.")
+    return prompt
 
 
 def _mime_type_for_image_path(path: Path) -> str:
