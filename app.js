@@ -178,11 +178,13 @@ const BUSINESS_CLASS_KEYWORDS = ["business", "premier", "elite"];
 const IMAGE_SHIFT_STEP_COUNT = 8;
 const IMAGE_SHIFT_MAX_PX = 400;
 const IMAGE_SHIFT_ONE_STEP_PX = IMAGE_SHIFT_MAX_PX / IMAGE_SHIFT_STEP_COUNT;
-const FRAME_IMAGE_SHIFT_STEP_COUNT = 12;
-const FRAME_IMAGE_SHIFT_MAX_PX = 900;
+const FRAME_IMAGE_SHIFT_STEP_COUNT = 18;
+const FRAME_IMAGE_SHIFT_MAX_PX = 1800;
 const FRAME_IMAGE_SHIFT_ONE_STEP_PX = FRAME_IMAGE_SHIFT_MAX_PX / FRAME_IMAGE_SHIFT_STEP_COUNT;
 const IMAGE_SCALE_MIN = 100;
 const IMAGE_SCALE_MAX = 150;
+const FRAME_IMAGE_SCALE_DEFAULT = 125;
+const FRAME_IMAGE_SCALE_MAX = 250;
 const IMAGE_SCALE_STEP = 3;
 const CUSTOM_ACCENT_TRIGGER_WINDOW_MS = 550;
 const CUSTOM_ACCENT_TRIGGER_TAP_COUNT = 3;
@@ -1876,7 +1878,9 @@ function renderLayoutTypes() {
       if (state.bannerLayout === layout.value) chip.classList.add("is-active");
       chip.addEventListener("click", () => {
         if (layout.disabled) return;
+        const previousLayout = state.bannerLayout;
         state.bannerLayout = layout.value;
+        applyFrameImagePositionDefaults(previousLayout);
         invalidateRenderedBanners();
         renderLayoutTypes();
         renderBannerMarkSelector();
@@ -1910,6 +1914,13 @@ function usesYandexGoFramePalette(brand = state.bannerBrand, logoVariant = state
 
 function isFrameLayout(layout = state.bannerLayout) {
   return String(layout || "").trim().toLowerCase().startsWith("frame");
+}
+
+function applyFrameImagePositionDefaults(previousLayout = "") {
+  if (!isFrameLayout() || isFrameLayout(previousLayout)) return;
+  if ((Number(state.imageScalePercent) || IMAGE_SCALE_MIN) === IMAGE_SCALE_MIN) {
+    state.imageScalePercent = FRAME_IMAGE_SCALE_DEFAULT;
+  }
 }
 
 function normalizeFrameLayoutForCurrentPalette() {
@@ -2115,6 +2126,11 @@ function renderVideoBrandSelector() {
 function renderShiftControls() {
   const values = getActiveImagePositionValues();
   const shiftStepCount = getImageShiftStepCount();
+  if (imageScaleEl) {
+    imageScaleEl.min = String(IMAGE_SCALE_MIN);
+    imageScaleEl.max = String(getImageScaleMax());
+    imageScaleEl.step = String(IMAGE_SCALE_STEP);
+  }
   [imageShiftXEl, imageShiftYEl].forEach((inputEl) => {
     if (!inputEl) return;
     inputEl.min = String(-shiftStepCount);
@@ -2154,8 +2170,9 @@ function parseBannerPositionKey(key) {
 }
 
 function getGlobalImagePositionValues() {
+  const rawScale = Number(state.imageScalePercent) || IMAGE_SCALE_MIN;
   return {
-    imageScalePercent: Number(state.imageScalePercent) || IMAGE_SCALE_MIN,
+    imageScalePercent: Math.max(IMAGE_SCALE_MIN, Math.min(getImageScaleMax(), rawScale)),
     imageShiftXStep: clampShiftStep(Number(state.imageShiftXStep) || 0),
     imageShiftYStep: clampShiftStep(Number(state.imageShiftYStep) || 0),
   };
@@ -2164,8 +2181,9 @@ function getGlobalImagePositionValues() {
 function normalizeImagePositionValues(values) {
   const globalValues = getGlobalImagePositionValues();
   const rawScale = Number(values?.imageScalePercent ?? values?.scalePercent ?? globalValues.imageScalePercent);
+  const scaleMax = getImageScaleMax();
   return {
-    imageScalePercent: Math.max(IMAGE_SCALE_MIN, Math.min(IMAGE_SCALE_MAX, Number.isFinite(rawScale) ? rawScale : globalValues.imageScalePercent)),
+    imageScalePercent: Math.max(IMAGE_SCALE_MIN, Math.min(scaleMax, Number.isFinite(rawScale) ? rawScale : globalValues.imageScalePercent)),
     imageShiftXStep: clampShiftStep(Number(values?.imageShiftXStep ?? values?.xStep ?? globalValues.imageShiftXStep) || 0),
     imageShiftYStep: clampShiftStep(Number(values?.imageShiftYStep ?? values?.yStep ?? globalValues.imageShiftYStep) || 0),
   };
@@ -2252,6 +2270,10 @@ function getImageShiftStepCount() {
 
 function getImageShiftOneStepPx() {
   return isFrameLayout() ? FRAME_IMAGE_SHIFT_ONE_STEP_PX : IMAGE_SHIFT_ONE_STEP_PX;
+}
+
+function getImageScaleMax() {
+  return isFrameLayout() ? FRAME_IMAGE_SCALE_MAX : IMAGE_SCALE_MAX;
 }
 
 function clampShiftStep(stepValue) {
@@ -2877,6 +2899,7 @@ async function generateEditedSourceImage() {
 
 function buildRenderPayload() {
   const selectedLibraryImage = findLibraryImageByUrl(state.bannerSourceImageUrl);
+  const globalImagePosition = getGlobalImagePositionValues();
   const bannerImageOverrides = Object.entries(state.bannerImageOverrides || {})
     .map(([key, values]) => {
       const parsed = parseBannerPositionKey(key);
@@ -2895,10 +2918,10 @@ function buildRenderPayload() {
     imageUrl: state.bannerSourceImageUrl,
     bannerSourceUrl: selectedLibraryImage?.banner_source_url || "",
     country: isDriveService() ? state.driveCountry : state.selectedCountry,
-    imageScale: (Number(state.imageScalePercent) || 100) / 100,
-    imageShiftX: stepToShiftPx(Number(state.imageShiftXStep) || 0),
+    imageScale: globalImagePosition.imageScalePercent / 100,
+    imageShiftX: stepToShiftPx(globalImagePosition.imageShiftXStep),
     // UX rule: moving Y slider right should move image up.
-    imageShiftY: -stepToShiftPx(Number(state.imageShiftYStep) || 0),
+    imageShiftY: -stepToShiftPx(globalImagePosition.imageShiftYStep),
     textSets: state.bannerTextSets.map((set) => ({
       title: String(set.title || "").trim(),
       subtitle: String(set.subtitle || "").trim(),
@@ -3503,12 +3526,13 @@ if (imageShiftXEl) {
 if (imageScaleEl) {
   imageScaleEl.addEventListener("input", (event) => {
     const raw = Number(event.target.value);
+    const scaleMax = getImageScaleMax();
     if (!Number.isFinite(raw)) {
       updateActiveImagePosition({ imageScalePercent: IMAGE_SCALE_MIN });
     } else {
-      const clamped = Math.max(IMAGE_SCALE_MIN, Math.min(IMAGE_SCALE_MAX, raw));
+      const clamped = Math.max(IMAGE_SCALE_MIN, Math.min(scaleMax, raw));
       const snapped = Math.round((clamped - IMAGE_SCALE_MIN) / IMAGE_SCALE_STEP) * IMAGE_SCALE_STEP + IMAGE_SCALE_MIN;
-      updateActiveImagePosition({ imageScalePercent: Math.max(IMAGE_SCALE_MIN, Math.min(IMAGE_SCALE_MAX, snapped)) });
+      updateActiveImagePosition({ imageScalePercent: Math.max(IMAGE_SCALE_MIN, Math.min(scaleMax, snapped)) });
     }
     markImagePositionChanged();
   });

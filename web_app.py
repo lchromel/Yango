@@ -3701,7 +3701,7 @@ def _transform_with_scale_and_shift(
     shift_x: int,
     shift_y: int,
 ) -> tuple[int, int, int, int]:
-    safe_scale = max(1.0, min(1.5, float(scale or 1.0)))
+    safe_scale = max(1.0, min(2.5, float(scale or 1.0)))
     sw = max(1, int(round(w * safe_scale)))
     sh = max(1, int(round(h * safe_scale)))
     cx = x + (w / 2.0)
@@ -5930,16 +5930,19 @@ class Handler(SimpleHTTPRequestHandler):
             layout_type = str(body.get("layoutType", "photo")).strip() or "photo"
             brand = _normalize_brand_key(str(body.get("brand", "yango")).strip())
             logo_variant = str(body.get("logoVariant", "default")).strip() or "default"
+            is_frame_layout = _is_frame_layout_variant(layout_type)
+            default_image_scale = 1.25 if is_frame_layout else 1.0
+            image_scale_max = 2.5 if is_frame_layout else 1.5
             try:
-                image_scale = float(body.get("imageScale", 1.0) or 1.0)
+                image_scale = float(body.get("imageScale", default_image_scale) or default_image_scale)
             except (TypeError, ValueError):
-                image_scale = 1.0
+                image_scale = default_image_scale
             # Accept both scale formats:
-            # - factor: 1.0 .. 1.5
-            # - percent: 100 .. 150
+            # - factor: 1.0 .. image_scale_max
+            # - percent: 100 .. image_scale_max * 100
             if image_scale > 10:
                 image_scale = image_scale / 100.0
-            image_scale = max(1.0, min(1.5, image_scale))
+            image_scale = max(1.0, min(image_scale_max, image_scale))
             try:
                 image_shift_x = int(body.get("imageShiftX", 0) or 0)
             except (TypeError, ValueError):
@@ -5967,7 +5970,7 @@ class Handler(SimpleHTTPRequestHandler):
                         override_scale = image_scale
                     if override_scale > 10:
                         override_scale = override_scale / 100.0
-                    override_scale = max(1.0, min(1.5, override_scale))
+                    override_scale = max(1.0, min(image_scale_max, override_scale))
                     try:
                         override_shift_x = int(raw_override.get("imageShiftX", image_shift_x) or 0)
                     except (TypeError, ValueError):
