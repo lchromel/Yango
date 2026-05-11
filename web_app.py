@@ -4268,7 +4268,10 @@ class Handler(SimpleHTTPRequestHandler):
                 model_description = str(body.get("modelDescription", "")).strip()
                 face_reference_image_url = str(body.get("faceReferenceImageUrl", "")).strip()
                 situation_description = str(body.get("situationDescription", "")).strip()
-                if style.strip().lower() == "3d":
+                service_key = service.strip().lower().replace("_", "-")
+                style_key = style.strip().lower().replace("_", "-")
+                is_yango_drive_service = service_key in {"yango drive", "yango-drive", "drive"}
+                if style_key == "3d" and not is_yango_drive_service:
                     prompt_source = situation_description or model_description
                     if not prompt_source:
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "description is required"})
@@ -4284,7 +4287,7 @@ class Handler(SimpleHTTPRequestHandler):
                         },
                     )
                     return
-                if style.strip().lower() in {"yango drive", "yango-drive", "drive"}:
+                if is_yango_drive_service or style_key in {"yango drive", "yango-drive", "drive"}:
                     if not car_model:
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "vehicleModel is required"})
                         return

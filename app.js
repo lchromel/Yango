@@ -1,10 +1,12 @@
 const VEHICLE_DATA_URL = "./assets/data/vehicles.json?v=20260507-rwanda";
-const IMAGE_SERVICE = "Ride-hailing";
+const SERVICE_OPTIONS = [
+  { label: "Ride-hailing", value: "ride-hailing" },
+  { label: "Yango Drive", value: "yango-drive" },
+];
 const IMAGE_STYLES = [
   { label: "Photo", value: "photo" },
   { label: "3D", value: "3d" },
   { label: "Edit", value: "edit" },
-  { label: "Yango Drive", value: "yango-drive" },
 ];
 const IMAGE_REQUEST_TIMEOUT_MS = 8 * 60 * 1000;
 const DRIVE_COUNTRY_CITY_OPTIONS = [
@@ -160,6 +162,8 @@ const state = {
   vehicleData: [],
   vehicleDataLoading: false,
   vehicleDataError: "",
+  selectedService: "ride-hailing",
+  serviceMenuOpen: false,
   selectedImageStyle: "photo",
   styleMenuOpen: false,
   driveCountry: "",
@@ -342,6 +346,11 @@ const countryToggleEl = document.getElementById("countryToggle");
 const countryDisplayEl = document.getElementById("countryDisplay");
 const countryChevronIconEl = document.getElementById("countryChevronIcon");
 const countryMenuEl = document.getElementById("countryMenu");
+const serviceToggleEl = document.getElementById("serviceToggle");
+const serviceDisplayEl = document.getElementById("serviceDisplay");
+const serviceChevronIconEl = document.getElementById("serviceChevronIcon");
+const serviceMenuEl = document.getElementById("serviceMenu");
+const styleSectionEl = document.getElementById("styleSection");
 const styleToggleEl = document.getElementById("styleToggle");
 const styleDisplayEl = document.getElementById("styleDisplay");
 const styleChevronIconEl = document.getElementById("styleChevronIcon");
@@ -589,8 +598,8 @@ function setSourceStatusForImage(record) {
   setSourceStatus(state.imageUrl ? "generated" : "none");
 }
 
-function isDriveStyle() {
-  return state.selectedImageStyle === "yango-drive";
+function isDriveService() {
+  return state.selectedService === "yango-drive";
 }
 
 function getSelectedDriveCountryRecord() {
@@ -609,10 +618,14 @@ function getDriveCarModel() {
 }
 
 function getCurrentCarModel() {
-  if (isDriveStyle() || state.activeTab === "video") {
+  if (isDriveService() || state.activeTab === "video") {
     return getDriveCarModel();
   }
   return getSelectedTransport()?.model?.trim() || "";
+}
+
+function getSelectedService() {
+  return SERVICE_OPTIONS.find((item) => item.value === state.selectedService) || SERVICE_OPTIONS[0];
 }
 
 function getSelectedImageStyle() {
@@ -1161,6 +1174,45 @@ function renderStyleControl() {
   });
 }
 
+function renderServiceControl() {
+  if (!serviceDisplayEl || !serviceToggleEl || !serviceMenuEl) return;
+  const selected = getSelectedService();
+  serviceDisplayEl.textContent = selected.label;
+  serviceToggleEl.setAttribute("aria-expanded", state.serviceMenuOpen ? "true" : "false");
+  if (serviceChevronIconEl) {
+    serviceChevronIconEl.src = state.serviceMenuOpen
+      ? "./assets/icons/ChevronUpM.svg"
+      : "./assets/icons/ChevronDownM.svg";
+  }
+  serviceMenuEl.classList.toggle("hidden", !state.serviceMenuOpen);
+  serviceMenuEl.innerHTML = "";
+  SERVICE_OPTIONS.forEach((service) => {
+    renderSelectOption(
+      serviceMenuEl,
+      { label: service.label },
+      state.selectedService === service.value,
+      () => {
+        state.selectedService = service.value;
+        state.serviceMenuOpen = false;
+        state.countryMenuOpen = false;
+        state.transportMenuOpen = false;
+        state.styleMenuOpen = false;
+        state.driveCountryMenuOpen = false;
+        state.driveCityMenuOpen = false;
+        state.carMenuOpen = false;
+        if (service.value === "yango-drive") {
+          state.bannerBrand = "yango-drive";
+          state.videoBrand = "yango-drive";
+        } else {
+          state.bannerBrand = "yango";
+        }
+        renderImageControls();
+        renderUiState();
+      }
+    );
+  });
+}
+
 function renderDriveCountryControl() {
   if (!driveCountryDisplayEl || !driveCountryToggleEl || !driveCountryMenuEl) return;
   driveCountryDisplayEl.textContent = state.driveCountry || "Select a country";
@@ -1428,7 +1480,7 @@ function renderUiState() {
   const isBusy = state.generating || state.bannerRendering || state.videoGenerating || state.videoRendering;
   const isEditStyle = state.selectedImageStyle === "edit";
   const is3dStyle = state.selectedImageStyle === "3d";
-  const isYangoDriveStyle = isDriveStyle();
+  const isYangoDriveService = isDriveService();
   loaderEl.classList.toggle("hidden", !isBusy);
   if (loaderLabelEl) {
     if (state.generating) {
@@ -1451,7 +1503,7 @@ function renderUiState() {
       ? !state.editSourceImageUrl
       : is3dStyle
         ? !state.situationDescription.trim()
-        : isYangoDriveStyle
+        : isYangoDriveService
           ? (!state.driveCountry || !state.driveCity || !getDriveCarModel())
           : (!state.selectedCountry || !getSelectedTransport()));
   renderBannersBtn.disabled = state.bannerRendering || !state.bannerSourceImageUrl;
@@ -1482,7 +1534,7 @@ function renderUiState() {
   if (quickActionRowEl) {
     const brandingReferenceUrl = getBrandingReferenceUrl();
     const is3dStyle = state.selectedImageStyle === "3d";
-    quickActionRowEl.classList.toggle("hidden", isEditStyle || is3dStyle || !state.imageUrl);
+    quickActionRowEl.classList.toggle("hidden", isEditStyle || is3dStyle || isYangoDriveService || !state.imageUrl);
     if (seatbeltActionBtn) {
       seatbeltActionBtn.disabled = state.generating || !state.imageUrl;
     }
@@ -1576,16 +1628,20 @@ function renderCompositions() {
 function renderImageControls() {
   const isEditStyle = state.selectedImageStyle === "edit";
   const is3dStyle = state.selectedImageStyle === "3d";
-  const isYangoDriveStyle = isDriveStyle();
+  const isYangoDriveService = isDriveService();
+  renderServiceControl();
   renderStyleControl();
+  if (styleSectionEl) {
+    styleSectionEl.classList.toggle("hidden", isYangoDriveService);
+  }
   photoStyleOnlyEls.forEach((element) => {
-    element.classList.toggle("hidden", isEditStyle || is3dStyle || isYangoDriveStyle);
+    element.classList.toggle("hidden", isEditStyle || is3dStyle || isYangoDriveService);
   });
   driveStyleOnlyEls.forEach((element) => {
-    element.classList.toggle("hidden", !isYangoDriveStyle);
+    element.classList.toggle("hidden", !isYangoDriveService);
   });
   if (situationDescriptionSectionEl) {
-    situationDescriptionSectionEl.classList.toggle("hidden", isEditStyle || isYangoDriveStyle);
+    situationDescriptionSectionEl.classList.toggle("hidden", isEditStyle || isYangoDriveService);
   }
   if (situationDescriptionLabelEl) {
     situationDescriptionLabelEl.textContent = is3dStyle ? "Description" : "Situation";
@@ -1595,7 +1651,7 @@ function renderImageControls() {
       ? "Describe the 3D object you want"
       : "Describe what you want";
   }
-  if (isYangoDriveStyle) {
+  if (isYangoDriveService) {
     state.countryMenuOpen = false;
     state.transportMenuOpen = false;
     if (countryMenuEl) countryMenuEl.classList.add("hidden");
@@ -2341,39 +2397,39 @@ async function uploadCustomVideo(file) {
 }
 
 async function generatePrompt() {
-  if (state.selectedImageStyle === "edit") {
+  const isYangoDriveService = isDriveService();
+  if (!isYangoDriveService && state.selectedImageStyle === "edit") {
     await generateEditedSourceImage();
     return;
   }
 
   const selectedTransport = getSelectedTransport();
-  const is3dStyle = state.selectedImageStyle === "3d";
-  const isYangoDriveStyle = isDriveStyle();
+  const is3dStyle = !isYangoDriveService && state.selectedImageStyle === "3d";
   if (is3dStyle && !state.situationDescription.trim()) {
     alert("DESCRIBE WHAT TO GENERATE");
     return;
   }
-  if (isYangoDriveStyle && !state.driveCountry) {
+  if (isYangoDriveService && !state.driveCountry) {
     alert("PLEASE SELECT COUNTRY");
     return;
   }
-  if (isYangoDriveStyle && !state.driveCity) {
+  if (isYangoDriveService && !state.driveCity) {
     alert("PLEASE SELECT CITY");
     return;
   }
-  if (isYangoDriveStyle && !getDriveCarModel()) {
+  if (isYangoDriveService && !getDriveCarModel()) {
     alert("PLEASE SELECT CAR MODEL");
     return;
   }
-  if (!is3dStyle && !isYangoDriveStyle && !state.selectedCountry) {
+  if (!is3dStyle && !isYangoDriveService && !state.selectedCountry) {
     alert("PLEASE SELECT COUNTRY");
     return;
   }
-  if (!is3dStyle && !isYangoDriveStyle && !selectedTransport) {
+  if (!is3dStyle && !isYangoDriveService && !selectedTransport) {
     alert("PLEASE SELECT VEHICLE");
     return;
   }
-  const currentCarModel = isYangoDriveStyle ? getDriveCarModel() : selectedTransport?.model || "";
+  const currentCarModel = isYangoDriveService ? getDriveCarModel() : selectedTransport?.model || "";
 
   const previousImageUrl = state.imageUrl;
   state.generating = true;
@@ -2394,18 +2450,18 @@ async function generatePrompt() {
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        service: IMAGE_SERVICE,
+        service: getSelectedService().label,
         style: getSelectedImageStyle().label,
-        country: isYangoDriveStyle ? state.driveCountry : state.selectedCountry,
-        city: isYangoDriveStyle ? state.driveCity : "",
+        country: isYangoDriveService ? state.driveCountry : state.selectedCountry,
+        city: isYangoDriveService ? state.driveCity : "",
         transportLabel: selectedTransport?.label || "",
         transportCode: selectedTransport?.tariffCode || "",
         basicClass: selectedTransport?.basicClass || "",
         vehicleModel: currentCarModel,
         vehicleType: selectedTransport?.vehicleType || "",
-        colorName: isYangoDriveStyle ? state.colorLabel : selectedTransport?.colorName || "",
-        colorHex: isYangoDriveStyle ? state.colorHex : "",
-        preferredAngle: isYangoDriveStyle ? state.selectedAngle : "",
+        colorName: isYangoDriveService ? state.colorLabel : selectedTransport?.colorName || "",
+        colorHex: isYangoDriveService ? state.colorHex : "",
+        preferredAngle: isYangoDriveService ? state.selectedAngle : "",
         composition: state.selectedComposition,
         modelDescription: state.heroDescription,
         faceReferenceImageUrl: state.faceReferenceImageUrl,
@@ -2418,7 +2474,7 @@ async function generatePrompt() {
 
     state.imageUrl = payload.image_local_url || payload.image_url || "";
     state.bannerSourceImageUrl = state.imageUrl;
-    if (isYangoDriveStyle) {
+    if (isYangoDriveService) {
       state.bannerBrand = "yango-drive";
       state.videoBrand = "yango-drive";
     } else {
@@ -2510,7 +2566,7 @@ function buildRenderPayload() {
   return {
     imageUrl: state.bannerSourceImageUrl,
     bannerSourceUrl: selectedLibraryImage?.banner_source_url || "",
-    country: isDriveStyle() ? state.driveCountry : state.selectedCountry,
+    country: isDriveService() ? state.driveCountry : state.selectedCountry,
     imageScale: (Number(state.imageScalePercent) || 100) / 100,
     imageShiftX: stepToShiftPx(Number(state.imageShiftXStep) || 0),
     // UX rule: moving Y slider right should move image up.
@@ -2783,6 +2839,7 @@ if (tabVideoEl) {
 countryToggleEl.addEventListener("click", () => {
   state.countryMenuOpen = !state.countryMenuOpen;
   state.transportMenuOpen = false;
+  state.serviceMenuOpen = false;
   state.styleMenuOpen = false;
   state.driveCountryMenuOpen = false;
   state.driveCityMenuOpen = false;
@@ -2790,9 +2847,23 @@ countryToggleEl.addEventListener("click", () => {
   renderImageControls();
 });
 
+if (serviceToggleEl) {
+  serviceToggleEl.addEventListener("click", () => {
+    state.serviceMenuOpen = !state.serviceMenuOpen;
+    state.styleMenuOpen = false;
+    state.countryMenuOpen = false;
+    state.transportMenuOpen = false;
+    state.driveCountryMenuOpen = false;
+    state.driveCityMenuOpen = false;
+    state.carMenuOpen = false;
+    renderImageControls();
+  });
+}
+
 if (driveCountryToggleEl) {
   driveCountryToggleEl.addEventListener("click", () => {
     state.driveCountryMenuOpen = !state.driveCountryMenuOpen;
+    state.serviceMenuOpen = false;
     state.driveCityMenuOpen = false;
     state.carMenuOpen = false;
     state.styleMenuOpen = false;
@@ -2804,6 +2875,7 @@ if (driveCityToggleEl) {
   driveCityToggleEl.addEventListener("click", () => {
     if (!state.driveCountry) return;
     state.driveCityMenuOpen = !state.driveCityMenuOpen;
+    state.serviceMenuOpen = false;
     state.driveCountryMenuOpen = false;
     state.carMenuOpen = false;
     state.styleMenuOpen = false;
@@ -2814,6 +2886,7 @@ if (driveCityToggleEl) {
 if (carModelToggleEl) {
   carModelToggleEl.addEventListener("click", () => {
     state.carMenuOpen = !state.carMenuOpen;
+    state.serviceMenuOpen = false;
     state.driveCountryMenuOpen = false;
     state.driveCityMenuOpen = false;
     state.styleMenuOpen = false;
@@ -2824,6 +2897,7 @@ if (carModelToggleEl) {
 if (styleToggleEl) {
   styleToggleEl.addEventListener("click", () => {
     state.styleMenuOpen = !state.styleMenuOpen;
+    state.serviceMenuOpen = false;
     state.countryMenuOpen = false;
     state.transportMenuOpen = false;
     state.driveCountryMenuOpen = false;
@@ -2836,6 +2910,7 @@ if (styleToggleEl) {
 transportToggleEl.addEventListener("click", () => {
   if (!state.selectedCountry) return;
   state.transportMenuOpen = !state.transportMenuOpen;
+  state.serviceMenuOpen = false;
   state.countryMenuOpen = false;
   state.styleMenuOpen = false;
   state.driveCountryMenuOpen = false;
@@ -2851,6 +2926,8 @@ document.addEventListener("click", (event) => {
     target instanceof Node &&
     (countryToggleEl.contains(target) ||
       countryMenuEl.contains(target) ||
+      serviceToggleEl?.contains(target) ||
+      serviceMenuEl?.contains(target) ||
       styleToggleEl?.contains(target) ||
       styleMenuEl?.contains(target) ||
       driveCountryToggleEl?.contains(target) ||
@@ -2868,6 +2945,7 @@ document.addEventListener("click", (event) => {
   if (
     state.countryMenuOpen ||
     state.transportMenuOpen ||
+    state.serviceMenuOpen ||
     state.styleMenuOpen ||
     state.driveCountryMenuOpen ||
     state.driveCityMenuOpen ||
@@ -2876,6 +2954,7 @@ document.addEventListener("click", (event) => {
   ) {
     state.countryMenuOpen = false;
     state.transportMenuOpen = false;
+    state.serviceMenuOpen = false;
     state.styleMenuOpen = false;
     state.driveCountryMenuOpen = false;
     state.driveCityMenuOpen = false;

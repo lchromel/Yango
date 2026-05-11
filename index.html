@@ -23,10 +23,22 @@
           <div class="tab-panel-scroll">
             <section class="section select-section">
               <p class="field-label">Service:</p>
-              <p class="static-field-value">Ride-hailing</p>
+              <div class="select-wrap">
+                <button id="serviceToggle" class="select-toggle" type="button" aria-expanded="false">
+                  <span id="serviceDisplay" class="select-display">Ride-hailing</span>
+                  <img
+                    id="serviceChevronIcon"
+                    class="select-chevron-icon"
+                    src="./assets/icons/ChevronDownM.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+                <div id="serviceMenu" class="select-menu hidden"></div>
+              </div>
             </section>
 
-            <section class="section select-section">
+            <section id="styleSection" class="section select-section">
               <p class="field-label">Style:</p>
               <div class="select-wrap">
                 <button id="styleToggle" class="select-toggle" type="button" aria-expanded="false">
