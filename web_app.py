@@ -3747,6 +3747,15 @@ def _rounded_rect_mask(width: int, height: int, radius: int) -> Image.Image:
     return hi.resize((width, height), Image.Resampling.LANCZOS)
 
 
+PHOTO_LAYOUT_REFERENCE_IMAGE_SIZES = {
+    "1200x1200": (2092, 1578),
+    "1200x1350": (2400, 1810),
+    "1200x1500": (2400, 1810),
+    "1200x628": (1640, 1237),
+    "1080x1920": (3278, 2472),
+}
+
+
 def _is_yandex_go_frame_palette(brand: str, logo_variant: str) -> bool:
     normalized_brand = _normalize_brand_key(brand)
     if normalized_brand == "yandex-go":
@@ -3817,6 +3826,7 @@ def _paste_rounded_cover(
     image_scale: float = 1.0,
     image_shift_x: int = 0,
     image_shift_y: int = 0,
+    reference_cover_size: Optional[tuple[int, int]] = None,
 ) -> None:
     x, y, w, h = [int(round(v)) for v in box]
     w = max(1, w)
@@ -3824,8 +3834,9 @@ def _paste_rounded_cover(
     panel = Image.new("RGBA", (w, h), fallback_fill)
     if source is not None:
         source_rgba = source.convert("RGBA")
-        safe_scale = max(1.0, min(1.5, float(image_scale or 1.0)))
-        cover_scale = max(w / max(1, source_rgba.width), h / max(1, source_rgba.height)) * safe_scale
+        safe_scale = max(1.0, min(3.5, float(image_scale or 1.0)))
+        ref_w, ref_h = reference_cover_size or (w, h)
+        cover_scale = max(ref_w / max(1, source_rgba.width), ref_h / max(1, source_rgba.height)) * safe_scale
         resized_w = max(1, int(round(source_rgba.width * cover_scale)))
         resized_h = max(1, int(round(source_rgba.height * cover_scale)))
         resized = source_rgba.resize((resized_w, resized_h), Image.Resampling.LANCZOS)
@@ -4153,6 +4164,7 @@ def _render_figma_brand_banner_by_size(
             image_scale=image_scale,
             image_shift_x=image_shift_x,
             image_shift_y=image_shift_y,
+            reference_cover_size=PHOTO_LAYOUT_REFERENCE_IMAGE_SIZES.get(size_key),
         )
         draw_badge(title_y - 24)
         _layout_bottom_blocks(
@@ -4256,6 +4268,7 @@ def _render_figma_brand_banner_by_size(
             image_scale=image_scale,
             image_shift_x=image_shift_x,
             image_shift_y=image_shift_y,
+            reference_cover_size=PHOTO_LAYOUT_REFERENCE_IMAGE_SIZES.get(size_key),
         )
         _draw_rounded_vertical_gradient(canvas, box=photo_box, radius=56, from_top=True, gradient_height=300, opacity=150)
         logo_size = 148 if is_icon_mark else (100 if is_go_palette else 92)
@@ -4335,6 +4348,7 @@ def _render_figma_brand_banner_by_size(
             image_scale=image_scale,
             image_shift_x=image_shift_x,
             image_shift_y=image_shift_y,
+            reference_cover_size=PHOTO_LAYOUT_REFERENCE_IMAGE_SIZES.get(size_key),
         )
         _draw_rounded_vertical_gradient(canvas, box=photo_box, radius=56, from_top=True, gradient_height=260, opacity=150)
         logo_size = 148 if is_icon_mark else (100 if is_go_palette else 92)
@@ -4395,6 +4409,7 @@ def _render_figma_brand_banner_by_size(
             image_scale=image_scale,
             image_shift_x=image_shift_x,
             image_shift_y=image_shift_y,
+            reference_cover_size=PHOTO_LAYOUT_REFERENCE_IMAGE_SIZES.get(size_key),
         )
         _draw_rounded_vertical_gradient(canvas, box=photo_box, radius=40, from_top=False, gradient_height=180, opacity=160)
         title_font = _load_font(headline_font_path, _scaled_font_size(96, font_scale))
