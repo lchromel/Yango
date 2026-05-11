@@ -495,7 +495,7 @@ def _infer_library_kind_from_name(file_name: str) -> str:
 
 def _infer_library_kind_from_url(image_url: str) -> str:
     path = urlparse(str(image_url or "").strip()).path.lower()
-    if "/generated/uploaded/" in path:
+    if "/generated/uploaded/" in path or "/generated/uploaded-drive/" in path:
         return "uploaded"
     return _infer_library_kind_from_name(Path(path).name)
 
@@ -524,6 +524,7 @@ def _public_image_library_record(record: dict) -> dict:
         "car_model": str(record.get("car_model", "")).strip(),
         "color_name": str(record.get("color_name", "")).strip(),
         "country": str(record.get("country", "")).strip(),
+        "service": str(record.get("service", "")).strip(),
         "original_name": str(record.get("original_name", "")).strip(),
         "edit_prompt": str(record.get("edit_prompt", "")).strip(),
         "source_image_url": str(record.get("source_image_url", "")).strip(),
@@ -545,6 +546,7 @@ def _upsert_image_library_record(
     car_model: str = "",
     color_name: str = "",
     country: str = "",
+    service: str = "",
     original_name: str = "",
     edit_prompt: str = "",
     source_image_url: str = "",
@@ -578,6 +580,7 @@ def _upsert_image_library_record(
         record["car_model"] = str(car_model or record.get("car_model") or "").strip()
         record["color_name"] = str(color_name or record.get("color_name") or "").strip()
         record["country"] = str(country or record.get("country") or "").strip()
+        record["service"] = str(service or record.get("service") or "").strip()
         record["original_name"] = str(original_name or record.get("original_name") or "").strip()
         record["edit_prompt"] = str(edit_prompt or record.get("edit_prompt") or "").strip()
         record["source_image_url"] = str(source_image_url or record.get("source_image_url") or "").strip()
@@ -842,6 +845,27 @@ def _normalize_brand_key(brand: str) -> str:
     if normalized in {"drive", "yango drive", "yango-drive"}:
         return "yango-drive"
     return "yango"
+
+
+def _normalize_service_key(service: str) -> str:
+    normalized = str(service or "").strip().lower().replace("_", "-")
+    if normalized in {"drive", "yango drive", "yango-drive"}:
+        return "yango-drive"
+    if normalized in {"ride hailing", "ride-hailing", "ride"}:
+        return "ride-hailing"
+    return normalized
+
+
+def _normalize_upload_service(service: str) -> str:
+    normalized = _normalize_service_key(service)
+    return normalized if normalized in {"yango-drive", "ride-hailing"} else "ride-hailing"
+
+
+def _form_text_value(form: cgi.FieldStorage, name: str, default: str = "") -> str:
+    value = form.getvalue(name, default)
+    if isinstance(value, list):
+        value = value[0] if value else default
+    return str(value or default).strip()
 
 
 def _brand_logo_text(brand: str) -> str:
@@ -2518,7 +2542,11 @@ def uncrop_image_with_clipdrop(source_image_url: str, *, country: str = "") -> s
     return f"/output/uncrop/{bucket}/{file_name}"
 
 
-def _save_uploaded_data_url(data_url: str, original_name: str = "") -> str:
+def _normalize_upload_bucket(service: str) -> str:
+    return "uploaded-drive" if _normalize_service_key(service) == "yango-drive" else "uploaded"
+
+
+def _save_uploaded_data_url(data_url: str, original_name: str = "", service: str = "") -> str:
     match = re.match(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.+)$", data_url, re.DOTALL)
     if not match:
         raise ValueError("Invalid image data URL")
@@ -2541,14 +2569,15 @@ def _save_uploaded_data_url(data_url: str, original_name: str = "") -> str:
     stem = Path(original_name).stem if original_name else "upload"
     safe_stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_") or "upload"
     file_name = f"{safe_stem}_{stamp}.{ext}"
-    target_dir = GENERATED_DIR / "uploaded"
+    bucket = _normalize_upload_bucket(service)
+    target_dir = GENERATED_DIR / bucket
     target_dir.mkdir(parents=True, exist_ok=True)
     file_path = target_dir / file_name
     image.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/uploaded/{file_name}"
+    return f"/output/generated/{bucket}/{file_name}"
 
 
-def _save_uploaded_file_bytes(file_bytes: bytes, original_name: str = "") -> str:
+def _save_uploaded_file_bytes(file_bytes: bytes, original_name: str = "", service: str = "") -> str:
     if not file_bytes:
         raise ValueError("Uploaded image is empty")
 
@@ -2558,11 +2587,12 @@ def _save_uploaded_file_bytes(file_bytes: bytes, original_name: str = "") -> str
     stem = Path(original_name).stem if original_name else "upload"
     safe_stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_") or "upload"
     file_name = f"{safe_stem}_{stamp}.png"
-    target_dir = GENERATED_DIR / "uploaded"
+    bucket = _normalize_upload_bucket(service)
+    target_dir = GENERATED_DIR / bucket
     target_dir.mkdir(parents=True, exist_ok=True)
     file_path = target_dir / file_name
     image.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/uploaded/{file_name}"
+    return f"/output/generated/{bucket}/{file_name}"
 
 
 def _save_uploaded_video_bytes(file_bytes: bytes, original_name: str = "") -> str:
@@ -4215,11 +4245,16 @@ class Handler(SimpleHTTPRequestHandler):
                         return
                     file_bytes = image_field.file.read()
                     file_name = str(getattr(image_field, "filename", "") or "").strip()
-                    local_url = _save_uploaded_file_bytes(file_bytes, file_name)
+                    upload_service = _normalize_upload_service(_form_text_value(form, "service"))
+                    upload_country = _form_text_value(form, "country")
+                    if not upload_country:
+                        upload_country = "Uploaded Drive" if upload_service == "yango-drive" else "Uploaded"
+                    local_url = _save_uploaded_file_bytes(file_bytes, file_name, service=upload_service)
                     library_image = _upsert_image_library_record(
                         local_url,
                         kind="uploaded",
-                        country="uploaded",
+                        country=upload_country,
+                        service=upload_service,
                         original_name=file_name,
                         label=Path(file_name).stem if file_name else "",
                     )
@@ -4290,12 +4325,22 @@ class Handler(SimpleHTTPRequestHandler):
                         return
                     prompt = generate_three_d_prompt_with_openai(prompt_source)
                     image_url, local_image_url = generate_three_d_image_with_gemini(prompt, country=country or "3d")
+                    library_image = _upsert_image_library_record(
+                        local_image_url,
+                        kind=_infer_library_kind_from_url(local_image_url),
+                        prompt=prompt,
+                        car_model=car_model,
+                        color_name=color_name,
+                        country=country or "3d",
+                        service="ride-hailing",
+                    )
                     self._send_json(
                         HTTPStatus.OK,
                         {
                             "image_url": image_url,
                             "image_local_url": local_image_url,
                             "prompt": prompt,
+                            "library_image": library_image,
                         },
                     )
                     return
@@ -4319,6 +4364,15 @@ class Handler(SimpleHTTPRequestHandler):
                         drive_wish=drive_wish,
                     )
                     image_url, local_image_url = generate_image_with_recraft(prompt, country=country)
+                    library_image = _upsert_image_library_record(
+                        local_image_url,
+                        kind=_infer_library_kind_from_url(local_image_url),
+                        prompt=prompt,
+                        car_model=car_model,
+                        color_name=color_name,
+                        country=country,
+                        service="yango-drive",
+                    )
                     self._send_json(
                         HTTPStatus.OK,
                         {
@@ -4326,6 +4380,7 @@ class Handler(SimpleHTTPRequestHandler):
                             "image_local_url": local_image_url,
                             "prompt": prompt,
                             "brand": "yango-drive",
+                            "library_image": library_image,
                         },
                     )
                     return
@@ -4363,12 +4418,22 @@ class Handler(SimpleHTTPRequestHandler):
                     )
                 else:
                     image_url, local_image_url = generate_image_with_openai(prompt, country=country)
+                library_image = _upsert_image_library_record(
+                    local_image_url,
+                    kind=_infer_library_kind_from_url(local_image_url),
+                    prompt=prompt,
+                    car_model=car_model,
+                    color_name=color_name,
+                    country=country,
+                    service="ride-hailing",
+                )
                 self._send_json(
                     HTTPStatus.OK,
                     {
                         "image_url": image_url,
                         "image_local_url": local_image_url,
                         "prompt": prompt,
+                        "library_image": library_image,
                     },
                 )
                 return
@@ -4468,11 +4533,16 @@ class Handler(SimpleHTTPRequestHandler):
                 if not image_data:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "imageData is required"})
                     return
-                local_url = _save_uploaded_data_url(image_data, file_name)
+                upload_service = _normalize_upload_service(str(body.get("service", "")).strip())
+                upload_country = str(body.get("country", "")).strip()
+                if not upload_country:
+                    upload_country = "Uploaded Drive" if upload_service == "yango-drive" else "Uploaded"
+                local_url = _save_uploaded_data_url(image_data, file_name, service=upload_service)
                 library_image = _upsert_image_library_record(
                     local_url,
                     kind="uploaded",
-                    country="uploaded",
+                    country=upload_country,
+                    service=upload_service,
                     original_name=file_name,
                     label=Path(file_name).stem if file_name else "",
                 )
@@ -4642,11 +4712,15 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             source_record = get_image_library_record(image_url)
             source_kind = str((source_record or {}).get("kind") or _infer_library_kind_from_url(image_url)).strip()
+            source_service = str((source_record or {}).get("service", "")).strip()
             library_country = country or str((source_record or {}).get("country", "")).strip()
-            if source_kind == "uploaded":
-                library_country = "uploaded"
-            elif not library_country:
-                library_country = "other"
+            if not library_country:
+                if source_service == "yango-drive":
+                    library_country = "Uploaded Drive"
+                elif source_kind == "uploaded":
+                    library_country = "Uploaded"
+                else:
+                    library_country = "other"
             persisted_image_url = _persist_image_for_library(image_url, country=library_country)
             banner_source_for_library = effective_image_url if _is_cached_uncrop_current(effective_image_url) else ""
             library_image = _upsert_image_library_record(
@@ -4654,6 +4728,7 @@ class Handler(SimpleHTTPRequestHandler):
                 kind=_infer_library_kind_from_url(persisted_image_url),
                 banner_source_url=banner_source_for_library,
                 country=library_country,
+                service=source_service or ("yango-drive" if _normalize_brand_key(brand) == "yango-drive" else "ride-hailing"),
                 original_name=Path(urlparse(persisted_image_url).path).name,
             )
             self._send_json(

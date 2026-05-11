@@ -516,6 +516,7 @@ function normalizeLibraryImage(item) {
     car_model: String(item.car_model || "").trim(),
     color_name: String(item.color_name || "").trim(),
     country: String(item.country || "").trim(),
+    service: String(item.service || "").trim(),
     original_name: String(item.original_name || "").trim(),
     edit_prompt: String(item.edit_prompt || "").trim(),
     source_image_url: String(item.source_image_url || "").trim(),
@@ -574,17 +575,44 @@ function getImageLibraryCountryLabel(item) {
 
 function getImageLibraryCountryOptions() {
   const seen = new Set();
-  state.imageLibrary.forEach((item) => {
+  getServiceFilteredImageLibrary().forEach((item) => {
     const label = getImageLibraryCountryLabel(item);
     if (label) seen.add(label);
   });
   return Array.from(seen);
 }
 
+function normalizeServiceKey(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace(/_/g, "-");
+  if (["drive", "yango drive", "yango-drive"].includes(normalized)) return "yango-drive";
+  if (normalized === "yango") return "ride-hailing";
+  if (["ride hailing", "ride-hailing", "ride_hailing"].includes(normalized)) return "ride-hailing";
+  return normalized;
+}
+
+function getLibraryImageService(item) {
+  const explicit = normalizeServiceKey(item?.service);
+  if (explicit) return explicit;
+  if (String(item?.kind || "").toLowerCase() === "uploaded") return "uploaded";
+  const prompt = String(item?.prompt || "").toLowerCase();
+  if (prompt.includes("yango drive")) return "yango-drive";
+  return "ride-hailing";
+}
+
+function getServiceFilteredImageLibrary() {
+  const selected = state.activeTab === "video" ? "yango-drive" : state.selectedService;
+  return state.imageLibrary.filter((item) => {
+    const service = getLibraryImageService(item);
+    if (service === "uploaded") return true;
+    return service === selected;
+  });
+}
+
 function getActiveSourceLibraryCountry(options = getImageLibraryCountryOptions()) {
   if (!options.length) return "";
   const selected = String(state.sourceLibraryCountry || "").trim();
   if (selected && options.includes(selected)) return selected;
+  if (isDriveService() && state.driveCountry && options.includes(state.driveCountry)) return state.driveCountry;
   if (state.selectedCountry && options.includes(state.selectedCountry)) return state.selectedCountry;
   if (options.includes("Uploaded")) return "Uploaded";
   if (options.includes("Other")) return "Other";
@@ -805,10 +833,11 @@ async function deleteLibraryVideo(videoUrl) {
 
 function renderSourceLibrary() {
   if (!sourceLibraryEl) return;
+  const libraryItems = getServiceFilteredImageLibrary();
   sourceLibraryEl.innerHTML = "";
-  sourceLibraryEl.classList.toggle("hidden", !state.sourceLibraryOpen || !state.imageLibrary.length);
+  sourceLibraryEl.classList.toggle("hidden", !state.sourceLibraryOpen || !libraryItems.length);
   if (sourceLibraryToggleEl) {
-    sourceLibraryToggleEl.disabled = !state.imageLibrary.length;
+    sourceLibraryToggleEl.disabled = !libraryItems.length;
     sourceLibraryToggleEl.setAttribute("aria-expanded", state.sourceLibraryOpen ? "true" : "false");
   }
   if (sourceLibraryChevronEl) {
@@ -817,10 +846,10 @@ function renderSourceLibrary() {
       : "./assets/icons/ChevronDownM.svg";
   }
 
-  if (!state.imageLibrary.length) {
+  if (!libraryItems.length) {
     const empty = document.createElement("p");
     empty.className = "source-library-empty";
-    empty.textContent = "No saved images yet.";
+    empty.textContent = isDriveService() ? "No saved Yango Drive images yet." : "No saved ride-hailing images yet.";
     sourceLibraryEl.appendChild(empty);
     return;
   }
@@ -880,7 +909,7 @@ function renderSourceLibrary() {
   selector.appendChild(selectorMenu);
   sourceLibraryEl.appendChild(selector);
 
-  const visibleItems = state.imageLibrary.filter((item) => getImageLibraryCountryLabel(item) === activeCountry);
+  const visibleItems = libraryItems.filter((item) => getImageLibraryCountryLabel(item) === activeCountry);
   if (!visibleItems.length) {
     const empty = document.createElement("p");
     empty.className = "source-library-empty";
@@ -933,10 +962,11 @@ function renderSourceLibrary() {
 
 function renderVideoImageLibrary() {
   if (!videoImageLibraryEl) return;
+  const libraryItems = getServiceFilteredImageLibrary();
   videoImageLibraryEl.innerHTML = "";
-  videoImageLibraryEl.classList.toggle("hidden", !state.videoImageLibraryOpen || !state.imageLibrary.length);
+  videoImageLibraryEl.classList.toggle("hidden", !state.videoImageLibraryOpen || !libraryItems.length);
   if (videoImageLibraryToggleEl) {
-    videoImageLibraryToggleEl.disabled = !state.imageLibrary.length;
+    videoImageLibraryToggleEl.disabled = !libraryItems.length;
     videoImageLibraryToggleEl.setAttribute("aria-expanded", state.videoImageLibraryOpen ? "true" : "false");
   }
   if (videoImageLibraryChevronEl) {
@@ -945,17 +975,17 @@ function renderVideoImageLibrary() {
       : "./assets/icons/ChevronDownM.svg";
   }
 
-  if (!state.imageLibrary.length) {
+  if (!libraryItems.length) {
     const empty = document.createElement("p");
     empty.className = "source-library-empty";
-    empty.textContent = "No saved images yet.";
+    empty.textContent = "No saved Yango Drive images yet.";
     videoImageLibraryEl.appendChild(empty);
     return;
   }
 
   const grid = document.createElement("div");
   grid.className = "source-library-grid";
-  state.imageLibrary.forEach((item) => {
+  libraryItems.forEach((item) => {
     const card = document.createElement("div");
     card.className = "source-card-wrap";
 
@@ -2454,6 +2484,13 @@ async function downloadAllBanners() {
 async function uploadCustomImage(file) {
   const formData = new FormData();
   formData.append("image", file, file.name || "upload.png");
+  formData.append("service", state.selectedService);
+  formData.append(
+    "country",
+    isDriveService()
+      ? (state.driveCountry || "Uploaded Drive")
+      : (state.selectedCountry || "Uploaded")
+  );
 
   const response = await fetch("/api/upload-image", {
     method: "POST",
@@ -2570,6 +2607,7 @@ async function generatePrompt() {
     }
     state.basePromptText = payload.prompt || "";
     state.editPromptText = "";
+    upsertStateLibraryImage(payload.library_image);
     if (!state.imageUrl) throw new Error("No image returned");
     if (previousImageUrl && previousImageUrl !== state.imageUrl) {
       pushImageToHistory(previousImageUrl);
@@ -3508,7 +3546,7 @@ topActionBtn.addEventListener("click", async () => {
 
 if (sourceLibraryToggleEl) {
   sourceLibraryToggleEl.addEventListener("click", () => {
-    if (!state.imageLibrary.length) return;
+    if (!getServiceFilteredImageLibrary().length) return;
     state.sourceLibraryOpen = !state.sourceLibraryOpen;
     if (!state.sourceLibraryOpen) {
       state.sourceLibraryCountryMenuOpen = false;
@@ -3527,7 +3565,7 @@ if (videoLibraryToggleEl) {
 
 if (videoImageLibraryToggleEl) {
   videoImageLibraryToggleEl.addEventListener("click", () => {
-    if (!state.imageLibrary.length) return;
+    if (!getServiceFilteredImageLibrary().length) return;
     state.videoImageLibraryOpen = !state.videoImageLibraryOpen;
     renderUiState();
   });
