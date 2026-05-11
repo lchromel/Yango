@@ -602,7 +602,7 @@ function getLibraryImageService(item) {
 }
 
 function getActiveImageLibraryServiceFilter() {
-  if (state.activeTab === "banners") return state.bannerBrand;
+  if (state.activeTab === "banner") return state.bannerBrand;
   if (state.activeTab === "video") return state.videoBrand;
   return state.selectedService;
 }
