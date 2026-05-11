@@ -19,6 +19,7 @@ import uuid
 import cgi
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import lru_cache
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
@@ -66,6 +67,15 @@ BRAND_LOGO_TEXT = "YANGO"
 BRAND_LOGO_TEXT_BY_KEY = {
     "yango": "YANGO",
     "yango-drive": "YANGO DRIVE",
+    "yango-pro": "YANGO PRO",
+    "yandex-go": "Yandex GO",
+}
+YANDEX_GO_LOGO_ASSET_BY_VARIANT = {
+    "en": "YandexGO_EN",
+    "ar": "YandexGO_AR",
+    "ge": "YandexGO_GE",
+    "en-ar": "YandexGO_EN-AR",
+    "ru": "YandexGO_RU",
 }
 UNCROP_TARGET_WIDTH = 3200
 UNCROP_TARGET_HEIGHT = 2472
@@ -865,6 +875,10 @@ def _normalize_brand_key(brand: str) -> str:
     normalized = str(brand or "").strip().lower().replace("_", "-")
     if normalized in {"drive", "yango drive", "yango-drive"}:
         return "yango-drive"
+    if normalized in {"pro", "yango pro", "yango-pro"}:
+        return "yango-pro"
+    if normalized in {"yandex go", "yandex-go", "yandexgo"}:
+        return "yandex-go"
     return "yango"
 
 
@@ -891,6 +905,119 @@ def _form_text_value(form: cgi.FieldStorage, name: str, default: str = "") -> st
 
 def _brand_logo_text(brand: str) -> str:
     return BRAND_LOGO_TEXT_BY_KEY.get(_normalize_brand_key(brand), BRAND_LOGO_TEXT)
+
+
+def _normalize_banner_logo_variant(logo_variant: str) -> str:
+    normalized = str(logo_variant or "").strip().lower().replace("_", "-")
+    if normalized in {"eng", "english", "yandex-go-en"}:
+        return "en"
+    if normalized in {"armenia", "armenian", "yandex-go-ar"}:
+        return "ar"
+    if normalized in {"georgia", "georgian", "yandex-go-ge"}:
+        return "ge"
+    if normalized in {"en-ar", "english-armenia", "english-armenian", "yandex-go-en-ar"}:
+        return "en-ar"
+    if normalized in {"rus", "russian", "yandex-go-ru"}:
+        return "ru"
+    return normalized if normalized in YANDEX_GO_LOGO_ASSET_BY_VARIANT else ""
+
+
+def _effective_yandex_go_logo_variant(brand: str, logo_variant: str) -> str:
+    normalized_brand = _normalize_brand_key(brand)
+    normalized_variant = _normalize_banner_logo_variant(logo_variant)
+    if normalized_variant:
+        return normalized_variant
+    if normalized_brand == "yandex-go":
+        return "en"
+    return ""
+
+
+def _logo_color_key(fill: Union[str, tuple]) -> str:
+    if isinstance(fill, str):
+        return "black" if fill.strip().lower() in {"#000", "#000000", "black"} else "white"
+    if isinstance(fill, tuple) and len(fill) >= 3:
+        return "black" if fill[0] < 64 and fill[1] < 64 and fill[2] < 64 else "white"
+    return "white"
+
+
+@lru_cache(maxsize=80)
+def _load_yandex_go_logo_image(variant: str, color: str, target_height: int) -> Optional[Image.Image]:
+    variant_key = _normalize_banner_logo_variant(variant) or "en"
+    color_key = "black" if str(color or "").strip().lower() == "black" else "white"
+    asset_stem = YANDEX_GO_LOGO_ASSET_BY_VARIANT.get(variant_key)
+    if not asset_stem:
+        return None
+
+    target_height = max(1, int(target_height or 1))
+    svg_path = ROOT / "assets" / "logos" / f"{asset_stem}_{color_key}.svg"
+    png_path = ROOT / "assets" / "logos" / f"{asset_stem}_{color_key}.png"
+
+    if svg_path.exists():
+        try:
+            import cairosvg  # type: ignore
+
+            rendered = cairosvg.svg2png(url=str(svg_path), output_height=target_height)
+            with Image.open(BytesIO(rendered)) as logo_image:
+                return logo_image.convert("RGBA")
+        except Exception:
+            pass
+
+    if not png_path.exists():
+        return None
+    with Image.open(png_path) as logo_image:
+        logo = logo_image.convert("RGBA")
+    ratio = target_height / max(1, logo.height)
+    target_width = max(1, int(round(logo.width * ratio)))
+    return logo.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+
+def _measure_banner_logo(
+    draw: ImageDraw.ImageDraw,
+    *,
+    brand: str,
+    logo_variant: str,
+    logo_text: str,
+    logo_font: ImageFont.FreeTypeFont,
+    fill: Union[str, tuple],
+    target_height: int,
+) -> tuple[int, int, Optional[Image.Image]]:
+    effective_variant = _effective_yandex_go_logo_variant(brand, logo_variant)
+    if effective_variant:
+        logo_image = _load_yandex_go_logo_image(effective_variant, _logo_color_key(fill), target_height)
+        if logo_image is not None:
+            return logo_image.width, logo_image.height, logo_image
+
+    logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
+    return max(1, logo_box[2] - logo_box[0]), max(1, logo_box[3] - logo_box[1]), None
+
+
+def _draw_banner_logo(
+    canvas: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    *,
+    x: int,
+    y: int,
+    brand: str,
+    logo_variant: str,
+    logo_text: str,
+    logo_font: ImageFont.FreeTypeFont,
+    fill: Union[str, tuple],
+    target_height: int,
+) -> tuple[int, int]:
+    logo_w, logo_h, logo_image = _measure_banner_logo(
+        draw,
+        brand=brand,
+        logo_variant=logo_variant,
+        logo_text=logo_text,
+        logo_font=logo_font,
+        fill=fill,
+        target_height=target_height,
+    )
+    if logo_image is not None:
+        canvas.alpha_composite(logo_image, (int(x), int(y)))
+    else:
+        draw.text((int(x), int(y)), logo_text, fill=fill, font=logo_font)
+    return logo_w, logo_h
 
 
 def _drive_location_guide(country: str, city: str) -> str:
@@ -3509,6 +3636,7 @@ def _render_master_banner_by_size(
     image_shift_y: int = 0,
     banner_language: str = "general",
     brand: str = "yango",
+    logo_variant: str = "default",
 ) -> Image.Image:
     width, height = BANNER_SIZE_MAP[size_key]
     canvas = Image.new("RGBA", (width, height), "#d9d9d9")
@@ -3632,15 +3760,34 @@ def _render_master_banner_by_size(
                 target_bottom_y=badge_target_bottom_y,
             )
 
-        logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
-        logo_w = max(1, logo_box[2] - logo_box[0])
+        logo_target_h = int(round(logo_font.size * 0.88))
+        logo_w, _, _ = _measure_banner_logo(
+            draw,
+            brand=brand,
+            logo_variant=logo_variant,
+            logo_text=logo_text,
+            logo_font=logo_font,
+            fill=main_text_fill,
+            target_height=logo_target_h,
+        )
         if align_mode == "center":
             logo_x = (width - logo_w) // 2
         elif align_mode == "right":
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, 80), logo_text, fill=main_text_fill, font=logo_font)
+        _draw_banner_logo(
+            canvas,
+            draw,
+            x=logo_x,
+            y=80,
+            brand=brand,
+            logo_variant=logo_variant,
+            logo_text=logo_text,
+            logo_font=logo_font,
+            fill=main_text_fill,
+            target_height=logo_target_h,
+        )
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -3775,15 +3922,34 @@ def _render_master_banner_by_size(
                 target_bottom_y=badge_target_bottom_y,
             )
 
-        logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
-        logo_w = max(1, logo_box[2] - logo_box[0])
+        logo_target_h = int(round(logo_font.size * 0.88))
+        logo_w, _, _ = _measure_banner_logo(
+            draw,
+            brand=brand,
+            logo_variant=logo_variant,
+            logo_text=logo_text,
+            logo_font=logo_font,
+            fill=main_text_fill,
+            target_height=logo_target_h,
+        )
         if align_mode == "center":
             logo_x = (width - logo_w) // 2
         elif align_mode == "right":
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, 80), logo_text, fill=main_text_fill, font=logo_font)
+        _draw_banner_logo(
+            canvas,
+            draw,
+            x=logo_x,
+            y=80,
+            brand=brand,
+            logo_variant=logo_variant,
+            logo_text=logo_text,
+            logo_font=logo_font,
+            fill=main_text_fill,
+            target_height=logo_target_h,
+        )
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -3898,9 +4064,16 @@ def _render_master_banner_by_size(
             ],
             highlight_hex=accent_hex,
         )
-        logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
-        logo_w = max(1, logo_box[2] - logo_box[0])
-        logo_h = max(1, logo_box[3] - logo_box[1])
+        logo_target_h = int(round(logo_font.size * 0.88))
+        logo_w, logo_h, _ = _measure_banner_logo(
+            draw,
+            brand=brand,
+            logo_variant=logo_variant,
+            logo_text=logo_text,
+            logo_font=logo_font,
+            fill=main_text_fill,
+            target_height=logo_target_h,
+        )
         bottom_padding = 32
         logo_y = height - bottom_padding - logo_h
         if align_mode == "center":
@@ -3909,7 +4082,18 @@ def _render_master_banner_by_size(
             logo_x = width - 32 - logo_w
         else:
             logo_x = 32
-        draw.text((logo_x, logo_y), logo_text, fill=main_text_fill, font=logo_font)
+        _draw_banner_logo(
+            canvas,
+            draw,
+            x=logo_x,
+            y=logo_y,
+            brand=brand,
+            logo_variant=logo_variant,
+            logo_text=logo_text,
+            logo_font=logo_font,
+            fill=main_text_fill,
+            target_height=logo_target_h,
+        )
         disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, 511)
         disclaimer_h = _measure_multiline_with_ratio(
             draw,
@@ -3972,9 +4156,16 @@ def _render_master_banner_by_size(
             else 0
         )
         disclaimer_h = _measure_multiline_with_ratio(draw, text=disclaimer_wrapped, font=disclaimer_font, line_height_ratio=1.28)
-        logo_box = draw.textbbox((0, 0), logo_text, font=logo_font)
-        logo_w = max(1, logo_box[2] - logo_box[0])
-        logo_h = max(1, logo_box[3] - logo_box[1])
+        logo_target_h = int(round(logo_font.size * 0.88))
+        logo_w, logo_h, _ = _measure_banner_logo(
+            draw,
+            brand=brand,
+            logo_variant=logo_variant,
+            logo_text=logo_text,
+            logo_font=logo_font,
+            fill=main_text_fill,
+            target_height=logo_target_h,
+        )
 
         gap_title_subtitle = 48
         gap_subtitle_logo = 80
@@ -4054,7 +4245,18 @@ def _render_master_banner_by_size(
             logo_x = width - 80 - logo_w
         else:
             logo_x = 80
-        draw.text((logo_x, int(cursor_y)), logo_text, fill=main_text_fill, font=logo_font)
+        _draw_banner_logo(
+            canvas,
+            draw,
+            x=logo_x,
+            y=int(cursor_y),
+            brand=brand,
+            logo_variant=logo_variant,
+            logo_text=logo_text,
+            logo_font=logo_font,
+            fill=main_text_fill,
+            target_height=logo_target_h,
+        )
         cursor_y += logo_h + gap_logo_disclaimer
         _draw_multiline_with_ratio(
             canvas,
@@ -4085,6 +4287,7 @@ def render_banner_images(
     country: str = "",
     banner_source_url: str = "",
     brand: str = "yango",
+    logo_variant: str = "default",
 ) -> tuple[list[dict], str, str, dict]:
     _ensure_output_directories()
 
@@ -4199,6 +4402,7 @@ def render_banner_images(
                 image_shift_y=render_image_shift_y,
                 banner_language=banner_language,
                 brand=brand,
+                logo_variant=logo_variant,
             )
 
             file_name = f"banner_{normalized_layout}_set{set_index + 1}_{size_key}_{now}.png"
@@ -4703,6 +4907,7 @@ class Handler(SimpleHTTPRequestHandler):
                 ]
             layout_type = str(body.get("layoutType", "photo")).strip() or "photo"
             brand = _normalize_brand_key(str(body.get("brand", "yango")).strip())
+            logo_variant = str(body.get("logoVariant", "default")).strip() or "default"
             try:
                 image_scale = float(body.get("imageScale", 1.0) or 1.0)
             except (TypeError, ValueError):
@@ -4774,6 +4979,7 @@ class Handler(SimpleHTTPRequestHandler):
                 country=country,
                 banner_source_url=banner_source_url,
                 brand=brand,
+                logo_variant=logo_variant,
             )
             if not banners:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "No supported sizes provided"})

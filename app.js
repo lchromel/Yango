@@ -62,6 +62,18 @@ const BRAND_OPTIONS = [
   { label: "Yango", value: "yango" },
   { label: "Yango Drive", value: "yango-drive" },
 ];
+const BANNER_BRAND_OPTIONS = [
+  ...BRAND_OPTIONS,
+  { label: "Yandex GO", value: "yandex-go" },
+  { label: "Yango Pro", value: "yango-pro" },
+];
+const YANDEX_GO_LOGO_OPTIONS = [
+  { label: "English", value: "en" },
+  { label: "Armenia", value: "ar" },
+  { label: "Georgia", value: "ge" },
+  { label: "English/Armenia", value: "en-ar" },
+  { label: "Russian", value: "ru" },
+];
 const EDIT_CLEANUP_PROMPT = [
   "убери текстовый блок, логотип и дисклеймер обрежь все лишнее чтобы суть была крупно по центру изображения и заполняло все пространство",
 ].join(" ");
@@ -215,6 +227,7 @@ const state = {
   sourceLibraryOpen: false,
   bannerLayout: "photo",
   bannerBrand: "yango",
+  bannerLogoVariant: "default",
   videoBrand: "yango-drive",
   bannerAccentPreset: "lime",
   bannerAccentCustomColor: ACCENT_PRESET_VALUES.lime,
@@ -430,6 +443,8 @@ const sourceLibraryToggleEl = document.getElementById("sourceLibraryToggle");
 const sourceLibraryChevronEl = document.getElementById("sourceLibraryChevron");
 const layoutTypeRowEl = document.getElementById("layoutTypeRow");
 const bannerBrandRowEl = document.getElementById("bannerBrandRow");
+const bannerLogoSectionEl = document.getElementById("bannerLogoSection");
+const bannerLogoRowEl = document.getElementById("bannerLogoRow");
 const videoBrandRowEl = document.getElementById("videoBrandRow");
 const imageScaleEl = document.getElementById("imageScale");
 const imageShiftXEl = document.getElementById("imageShiftX");
@@ -586,7 +601,7 @@ function getImageLibraryCountryOptions(libraryItems = getServiceFilteredImageLib
 function normalizeServiceKey(value) {
   const normalized = String(value || "").trim().toLowerCase().replace(/_/g, "-");
   if (["drive", "yango drive", "yango-drive"].includes(normalized)) return "yango-drive";
-  if (normalized === "yango") return "ride-hailing";
+  if (["yango", "yango pro", "yango-pro", "yandex go", "yandex-go"].includes(normalized)) return "ride-hailing";
   if (["ride hailing", "ride-hailing", "ride_hailing"].includes(normalized)) return "ride-hailing";
   return normalized;
 }
@@ -747,7 +762,7 @@ function applySelectedImage(record, options = {}) {
 
 function clearBannerSourceIfBrandMismatch() {
   const selected = findLibraryImageByUrl(state.bannerSourceImageUrl);
-  if (!selected || getLibraryImageService(selected) === state.bannerBrand) return;
+  if (!selected || getLibraryImageService(selected) === normalizeServiceKey(state.bannerBrand)) return;
   state.bannerSourceImageUrl = "";
   setSourceStatus("none");
   invalidateRenderedBanners();
@@ -1717,6 +1732,7 @@ function renderUiState() {
   renderVideoImageLibrary();
   renderVideoLibrary();
   renderBannerBrandSelector();
+  renderBannerLogoSelector();
   renderVideoBrandSelector();
 }
 
@@ -1889,9 +1905,9 @@ function renderLayoutTypes() {
 
 function renderBrandSelector(rowEl, selectedBrand, onSelect, options = {}) {
   if (!rowEl) return;
-  const { yangoDisabled = false } = options;
+  const { yangoDisabled = false, brands = BRAND_OPTIONS } = options;
   rowEl.innerHTML = "";
-  BRAND_OPTIONS.forEach((brand) => {
+  brands.forEach((brand) => {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "angle-chip";
@@ -1909,18 +1925,71 @@ function renderBrandSelector(rowEl, selectedBrand, onSelect, options = {}) {
   });
 }
 
+function getBannerLogoOptions(brand = state.bannerBrand) {
+  const normalizedBrand = String(brand || "").trim().toLowerCase();
+  if (normalizedBrand === "yandex-go") return YANDEX_GO_LOGO_OPTIONS;
+  if (normalizedBrand === "yango-drive") {
+    return [
+      { label: "Yango Drive", value: "default" },
+      ...YANDEX_GO_LOGO_OPTIONS.map((optionDef) => ({
+        ...optionDef,
+        label: `Yandex GO ${optionDef.label}`,
+      })),
+    ];
+  }
+  return [];
+}
+
+function normalizeBannerLogoVariantForBrand(brand, value) {
+  const options = getBannerLogoOptions(brand);
+  if (!options.length) return "default";
+  const normalizedValue = String(value || "").trim().toLowerCase();
+  if (options.some((optionDef) => optionDef.value === normalizedValue)) return normalizedValue;
+  return options[0].value;
+}
+
 function renderBannerBrandSelector() {
   renderBrandSelector(bannerBrandRowEl, state.bannerBrand, (value) => {
     state.bannerBrand = value;
+    state.bannerLogoVariant = value === "yango-drive"
+      ? "default"
+      : normalizeBannerLogoVariantForBrand(value, state.bannerLogoVariant);
     state.sourceLibraryCountry = "";
     state.sourceLibraryCountryMenuOpen = false;
     clearBannerSourceIfBrandMismatch();
     invalidateRenderedBanners();
     renderBannerBrandSelector();
+    renderBannerLogoSelector();
     renderSelectedSource();
     renderSourceLibrary();
     renderBannerSetsView();
     renderTopAction();
+  }, { brands: BANNER_BRAND_OPTIONS });
+}
+
+function renderBannerLogoSelector() {
+  const options = getBannerLogoOptions();
+  if (bannerLogoSectionEl) {
+    bannerLogoSectionEl.classList.toggle("hidden", !options.length);
+  }
+  if (!bannerLogoRowEl) return;
+  bannerLogoRowEl.innerHTML = "";
+  if (!options.length) return;
+  state.bannerLogoVariant = normalizeBannerLogoVariantForBrand(state.bannerBrand, state.bannerLogoVariant);
+  options.forEach((optionDef) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "angle-chip";
+    chip.textContent = optionDef.label;
+    if (state.bannerLogoVariant === optionDef.value) chip.classList.add("is-active");
+    chip.addEventListener("click", () => {
+      state.bannerLogoVariant = optionDef.value;
+      invalidateRenderedBanners();
+      renderBannerLogoSelector();
+      renderBannerSetsView();
+      renderTopAction();
+    });
+    bannerLogoRowEl.appendChild(chip);
   });
 }
 
@@ -2724,6 +2793,7 @@ function buildRenderPayload() {
     })),
     layoutType: state.bannerLayout,
     brand: state.bannerBrand,
+    logoVariant: normalizeBannerLogoVariantForBrand(state.bannerBrand, state.bannerLogoVariant),
     sizes: ["1200x1200", "1200x1350", "1200x628", "1080x1920"],
     bannerImageOverrides,
   };
