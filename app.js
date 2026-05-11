@@ -183,7 +183,7 @@ const FRAME_IMAGE_SHIFT_MAX_PX = 1800;
 const FRAME_IMAGE_SHIFT_ONE_STEP_PX = FRAME_IMAGE_SHIFT_MAX_PX / FRAME_IMAGE_SHIFT_STEP_COUNT;
 const IMAGE_SCALE_MIN = 100;
 const IMAGE_SCALE_MAX = 150;
-const FRAME_IMAGE_SCALE_DEFAULT = 125;
+const FRAME_IMAGE_SCALE_DEFAULT = 100;
 const FRAME_IMAGE_SCALE_MAX = 350;
 const IMAGE_SCALE_STEP = 3;
 const CUSTOM_ACCENT_TRIGGER_WINDOW_MS = 550;
@@ -1624,6 +1624,22 @@ function renderTopAction() {
   }
 }
 
+function getAvailableBannerSourceUrl() {
+  return String(state.bannerSourceImageUrl || state.imageUrl || "").trim();
+}
+
+function restoreBannerSourceFromCurrentImage() {
+  if (state.bannerSourceImageUrl || !state.imageUrl) return false;
+  state.bannerSourceImageUrl = state.imageUrl;
+  const selected = findLibraryImageByUrl(state.bannerSourceImageUrl);
+  if (selected) {
+    setSourceStatusForImage(selected);
+  } else {
+    setSourceStatus("generated");
+  }
+  return true;
+}
+
 function invalidateRenderedBanners(resetAutoRenderEligibility = true) {
   state.renderedBanners = [];
   if (resetAutoRenderEligibility) {
@@ -1674,7 +1690,7 @@ function renderUiState() {
         : isYangoDriveService
           ? (!state.driveCountry || !state.driveCity || !getDriveCarModel())
           : (!state.selectedCountry || !getSelectedTransport()));
-  renderBannersBtn.disabled = state.bannerRendering || !state.bannerSourceImageUrl;
+  renderBannersBtn.disabled = state.bannerRendering || !getAvailableBannerSourceUrl();
   if (generateVideoBtnEl) {
     const selectedSavedVideo = findLibraryVideoByUrl(state.videoResultUrl);
     const canRemixSavedVideo = Boolean(selectedSavedVideo);
@@ -1881,12 +1897,13 @@ function renderLayoutTypes() {
         const previousLayout = state.bannerLayout;
         state.bannerLayout = layout.value;
         applyFrameImagePositionDefaults(previousLayout);
+        restoreBannerSourceFromCurrentImage();
         invalidateRenderedBanners();
         renderLayoutTypes();
         renderBannerMarkSelector();
         renderShiftControls();
         renderBannerSetsView();
-        renderTopAction();
+        renderUiState();
       });
       layoutGroup.appendChild(chip);
     });
@@ -2898,6 +2915,7 @@ async function generateEditedSourceImage() {
 }
 
 function buildRenderPayload() {
+  restoreBannerSourceFromCurrentImage();
   const selectedLibraryImage = findLibraryImageByUrl(state.bannerSourceImageUrl);
   const globalImagePosition = getGlobalImagePositionValues();
   const bannerImageOverrides = Object.entries(state.bannerImageOverrides || {})
@@ -2944,6 +2962,7 @@ function buildRenderPayload() {
 }
 
 async function createBanners() {
+  restoreBannerSourceFromCurrentImage();
   if (!state.bannerSourceImageUrl) {
     alert("UPLOAD OR GENERATE IMAGE FIRST");
     return;

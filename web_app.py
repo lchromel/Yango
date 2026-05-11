@@ -5946,7 +5946,7 @@ class Handler(SimpleHTTPRequestHandler):
             brand = _normalize_brand_key(str(body.get("brand", "yango")).strip())
             logo_variant = str(body.get("logoVariant", "default")).strip() or "default"
             is_frame_layout = _is_frame_layout_variant(layout_type)
-            default_image_scale = 1.25 if is_frame_layout else 1.0
+            default_image_scale = 1.0
             image_scale_max = 3.5 if is_frame_layout else 1.5
             try:
                 image_scale = float(body.get("imageScale", default_image_scale) or default_image_scale)
