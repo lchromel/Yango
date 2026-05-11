@@ -138,6 +138,11 @@
               <div id="angleRow" class="angle-row"></div>
             </section>
 
+            <section class="section drive-style-only hidden">
+              <label class="field-label" for="driveWishInput">Wish</label>
+              <textarea id="driveWishInput" class="text-area image-text-area" rows="3" placeholder="e.g. driving with desert in the background"></textarea>
+            </section>
+
             <section class="section select-section photo-style-only">
               <p class="field-label">Country:</p>
               <div class="select-wrap">
@@ -319,6 +324,29 @@
                 type="file"
                 accept="video/mp4,video/quicktime,video/webm"
               />
+            </section>
+
+            <section class="section">
+              <div class="source-library-header">
+                <p class="field-label">Source Images:</p>
+                <button
+                  id="videoImageLibraryToggle"
+                  class="source-library-toggle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="videoImageLibrary"
+                >
+                  <span>Choose Image</span>
+                  <img
+                    id="videoImageLibraryChevron"
+                    class="source-library-chevron"
+                    src="./assets/icons/ChevronDownM.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+              <div id="videoImageLibrary" class="source-library hidden"></div>
             </section>
 
             <section class="section">

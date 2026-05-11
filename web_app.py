@@ -1006,6 +1006,7 @@ def call_yango_drive_openai(
     *,
     country: str = "",
     city: str = "",
+    drive_wish: str = "",
 ) -> str:
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY is not set")
@@ -1039,6 +1040,15 @@ def call_yango_drive_openai(
     location_guide = _drive_location_guide(country, city)
     color = color_name.strip() or "white"
     angle_instruction = angle_rules or "Choose a bold premium automotive angle that fits the road geometry."
+    wish = str(drive_wish or "").strip()
+    wish_block = (
+        f"\nUser scene wish:\n{wish}\n\n"
+        "Respect the user scene wish if it is physically plausible for the selected city/country and does not conflict with the required car, color, angle, dry-road rule, safety, or premium automotive ad quality. "
+        "Integrate it naturally into SCENE + SETTING, EXPRESSION + ACTION, and LIGHTING where relevant. "
+        "If it conflicts with the selected location, adapt it to a plausible nearby setting instead of ignoring the selected city."
+        if wish
+        else ""
+    )
     _ = color_hex
 
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -1059,6 +1069,7 @@ Selected inputs:
 
 Location guide:
 {location_guide}
+{wish_block}
 
 Use this exact section format and section order:
 Prompt Structure
@@ -4260,6 +4271,7 @@ class Handler(SimpleHTTPRequestHandler):
                 style = str(body.get("style", "Photo")).strip()
                 country = str(body.get("country", "")).strip()
                 city = str(body.get("city", "")).strip()
+                drive_wish = str(body.get("driveWish", "")).strip()
                 transport_label = str(body.get("transportLabel", "")).strip()
                 transport_code = str(body.get("transportCode", "")).strip()
                 basic_class = str(body.get("basicClass", "")).strip()
@@ -4304,6 +4316,7 @@ class Handler(SimpleHTTPRequestHandler):
                         preferred_angle,
                         country=country,
                         city=city,
+                        drive_wish=drive_wish,
                     )
                     image_url, local_image_url = generate_image_with_recraft(prompt, country=country)
                     self._send_json(

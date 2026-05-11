@@ -177,6 +177,7 @@ const state = {
   colorLabel: "White",
   selectedPreset: "White",
   selectedAngle: "Front 3/4",
+  driveWish: "",
   selectedCountry: "",
   selectedTransportLabel: "",
   countryMenuOpen: false,
@@ -199,6 +200,7 @@ const state = {
   videoPromptText: "",
   videoLibrary: [],
   videoLibraryOpen: false,
+  videoImageLibraryOpen: false,
   videoGenerating: false,
   videoRendering: false,
   videoRenderStatus: "No video yet.",
@@ -372,6 +374,7 @@ const carModelCustomInputEl = document.getElementById("carModelCustomInput");
 const colorNameEl = document.getElementById("colorName");
 const presetColorsEl = document.getElementById("presetColors");
 const angleRowEl = document.getElementById("angleRow");
+const driveWishInputEl = document.getElementById("driveWishInput");
 const customColorInput = document.getElementById("customColorInput");
 const transportToggleEl = document.getElementById("transportToggle");
 const transportDisplayEl = document.getElementById("transportDisplay");
@@ -444,6 +447,9 @@ const videoResultWrapEl = document.getElementById("videoResultWrap");
 const videoResultPlayerEl = document.getElementById("videoResultPlayer");
 const videoDownloadLinkEl = document.getElementById("videoDownloadLink");
 const videoEmptyStateEl = document.getElementById("videoEmptyState");
+const videoImageLibraryEl = document.getElementById("videoImageLibrary");
+const videoImageLibraryToggleEl = document.getElementById("videoImageLibraryToggle");
+const videoImageLibraryChevronEl = document.getElementById("videoImageLibraryChevron");
 const videoLibraryEl = document.getElementById("videoLibrary");
 const videoLibraryToggleEl = document.getElementById("videoLibraryToggle");
 const videoLibraryChevronEl = document.getElementById("videoLibraryChevron");
@@ -674,6 +680,18 @@ function getAvailableCompositions() {
   return COMPOSITION_PRESETS.filter((item) => item.vehicleTypes.includes(vehicleType));
 }
 
+function applyDriveCarModelFromLibrary(image) {
+  const model = String(image?.car_model || "").trim();
+  if (!model) return;
+  if (TOP_RENTAL_CARS_DUBAI.includes(model)) {
+    state.selectedCarModel = model;
+    state.customCarModel = "";
+  } else {
+    state.selectedCarModel = CUSTOM_CAR_OPTION;
+    state.customCarModel = model;
+  }
+}
+
 function applySelectedImage(record, options = {}) {
   const image = normalizeLibraryImage(record);
   if (!image) return;
@@ -686,6 +704,25 @@ function applySelectedImage(record, options = {}) {
   }
   setSourceStatusForImage(image);
   renderBannerSetsView();
+  renderUiState();
+}
+
+function applySelectedVideoImage(record, options = {}) {
+  const image = normalizeLibraryImage(record);
+  if (!image) return;
+  const { closeLibrary = true } = options;
+  state.imageUrl = image.image_url;
+  state.basePromptText = image.prompt || "";
+  state.videoPromptText = "";
+  state.videoResultUrl = "";
+  state.videoRenderStatus = "Image source ready.";
+  applyDriveCarModelFromLibrary(image);
+  if (closeLibrary) {
+    state.videoImageLibraryOpen = false;
+  }
+  if (videoSourceStatusEl) {
+    videoSourceStatusEl.textContent = SOURCE_STATUS.generated;
+  }
   renderUiState();
 }
 
@@ -892,6 +929,55 @@ function renderSourceLibrary() {
     grid.appendChild(card);
   });
   sourceLibraryEl.appendChild(grid);
+}
+
+function renderVideoImageLibrary() {
+  if (!videoImageLibraryEl) return;
+  videoImageLibraryEl.innerHTML = "";
+  videoImageLibraryEl.classList.toggle("hidden", !state.videoImageLibraryOpen || !state.imageLibrary.length);
+  if (videoImageLibraryToggleEl) {
+    videoImageLibraryToggleEl.disabled = !state.imageLibrary.length;
+    videoImageLibraryToggleEl.setAttribute("aria-expanded", state.videoImageLibraryOpen ? "true" : "false");
+  }
+  if (videoImageLibraryChevronEl) {
+    videoImageLibraryChevronEl.src = state.videoImageLibraryOpen
+      ? "./assets/icons/ChevronUpM.svg"
+      : "./assets/icons/ChevronDownM.svg";
+  }
+
+  if (!state.imageLibrary.length) {
+    const empty = document.createElement("p");
+    empty.className = "source-library-empty";
+    empty.textContent = "No saved images yet.";
+    videoImageLibraryEl.appendChild(empty);
+    return;
+  }
+
+  const grid = document.createElement("div");
+  grid.className = "source-library-grid";
+  state.imageLibrary.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "source-card-wrap";
+
+    const previewBtn = document.createElement("button");
+    previewBtn.type = "button";
+    previewBtn.className = "source-card";
+    if (state.imageUrl && item.image_url === state.imageUrl) {
+      previewBtn.classList.add("is-active");
+    }
+    previewBtn.setAttribute("aria-label", item.car_model || item.original_name || item.label || "Saved image");
+
+    const preview = document.createElement("img");
+    preview.className = "source-card-image";
+    preview.src = item.image_url;
+    preview.alt = item.car_model || item.original_name || item.label || item.kind || "Saved image";
+    previewBtn.appendChild(preview);
+    previewBtn.addEventListener("click", () => applySelectedVideoImage(item));
+
+    card.appendChild(previewBtn);
+    grid.appendChild(card);
+  });
+  videoImageLibraryEl.appendChild(grid);
 }
 
 function renderVideoLibrary() {
@@ -1586,6 +1672,7 @@ function renderUiState() {
   }
   renderSelectedSource();
   renderSourceLibrary();
+  renderVideoImageLibrary();
   renderVideoLibrary();
   renderBannerBrandSelector();
   renderVideoBrandSelector();
@@ -2462,6 +2549,7 @@ async function generatePrompt() {
         colorName: isYangoDriveService ? state.colorLabel : selectedTransport?.colorName || "",
         colorHex: isYangoDriveService ? state.colorHex : "",
         preferredAngle: isYangoDriveService ? state.selectedAngle : "",
+        driveWish: isYangoDriveService ? state.driveWish : "",
         composition: state.selectedComposition,
         modelDescription: state.heroDescription,
         faceReferenceImageUrl: state.faceReferenceImageUrl,
@@ -2981,6 +3069,12 @@ if (customColorInput) {
   });
 }
 
+if (driveWishInputEl) {
+  driveWishInputEl.addEventListener("input", (event) => {
+    state.driveWish = event.target.value;
+  });
+}
+
 heroDescriptionInputEl.addEventListener("input", (event) => {
   state.heroDescription = event.target.value;
 });
@@ -3427,6 +3521,14 @@ if (videoLibraryToggleEl) {
   videoLibraryToggleEl.addEventListener("click", () => {
     if (!state.videoLibrary.length) return;
     state.videoLibraryOpen = !state.videoLibraryOpen;
+    renderUiState();
+  });
+}
+
+if (videoImageLibraryToggleEl) {
+  videoImageLibraryToggleEl.addEventListener("click", () => {
+    if (!state.imageLibrary.length) return;
+    state.videoImageLibraryOpen = !state.videoImageLibraryOpen;
     renderUiState();
   });
 }
