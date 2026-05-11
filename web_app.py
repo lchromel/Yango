@@ -4110,7 +4110,7 @@ def _render_master_banner_by_size(
             )
 
         logo_font = _load_font(headline_italic_font_path, 74)
-        title_font = _load_font(headline_font_path, _scaled_font_size(112, banner_font_scale))
+        title_font = _load_font(headline_font_path, _scaled_font_size(96, banner_font_scale))
         subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(40, banner_font_scale))
         disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(13, banner_font_scale))
 
