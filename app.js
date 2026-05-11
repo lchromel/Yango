@@ -163,7 +163,6 @@ const IMAGE_SHIFT_ONE_STEP_PX = IMAGE_SHIFT_MAX_PX / IMAGE_SHIFT_STEP_COUNT;
 const IMAGE_SCALE_MIN = 100;
 const IMAGE_SCALE_MAX = 150;
 const IMAGE_SCALE_STEP = 3;
-const BANNER_AUTO_RENDER_DEBOUNCE_MS = 550;
 const CUSTOM_ACCENT_TRIGGER_WINDOW_MS = 550;
 const CUSTOM_ACCENT_TRIGGER_TAP_COUNT = 3;
 const VIDEO_TAB_ENABLED = true;
@@ -475,7 +474,6 @@ const uploadVideoInputEl = document.getElementById("uploadVideoInput");
 const videoHeadline1El = document.getElementById("videoHeadline1");
 const videoHeadline2El = document.getElementById("videoHeadline2");
 const videoHeadline3El = document.getElementById("videoHeadline3");
-let bannerAutoRenderTimer = null;
 let customAccentTapCount = 0;
 let customAccentTapTimer = null;
 
@@ -2132,14 +2130,11 @@ function copyBannerImageOverridesToSet(fromSetIndex, toSetIndex) {
   });
 }
 
-function markImagePositionChanged(hadRenderedBanners) {
+function markImagePositionChanged() {
   renderShiftControls();
-  state.renderedBanners = [];
+  invalidateRenderedBanners();
   renderBannerSetsView();
   renderTopAction();
-  if (hadRenderedBanners) {
-    scheduleBannerAutoRender();
-  }
 }
 
 function clampShiftStep(stepValue) {
@@ -2801,32 +2796,10 @@ function buildRenderPayload() {
   };
 }
 
-function scheduleBannerAutoRender() {
-  if (bannerAutoRenderTimer) {
-    clearTimeout(bannerAutoRenderTimer);
-    bannerAutoRenderTimer = null;
-  }
-  if (!state.bannerSourceImageUrl || state.bannerRendering || !state.hasRenderedBanners) {
-    return;
-  }
-  bannerAutoRenderTimer = setTimeout(() => {
-    bannerAutoRenderTimer = null;
-    if (!state.bannerSourceImageUrl || state.bannerRendering || !state.hasRenderedBanners) {
-      return;
-    }
-    createBanners();
-  }, BANNER_AUTO_RENDER_DEBOUNCE_MS);
-}
-
 async function createBanners() {
   if (!state.bannerSourceImageUrl) {
     alert("UPLOAD OR GENERATE IMAGE FIRST");
     return;
-  }
-
-  if (bannerAutoRenderTimer) {
-    clearTimeout(bannerAutoRenderTimer);
-    bannerAutoRenderTimer = null;
   }
 
   state.bannerRendering = true;
@@ -3398,15 +3371,13 @@ renderBannersBtn.addEventListener("click", createBanners);
 
 if (imageShiftXEl) {
   imageShiftXEl.addEventListener("input", (event) => {
-    const hadRenderedBanners = state.hasRenderedBanners;
     updateActiveImagePosition({ imageShiftXStep: clampShiftStep(Number(event.target.value) || 0) });
-    markImagePositionChanged(hadRenderedBanners);
+    markImagePositionChanged();
   });
 }
 
 if (imageScaleEl) {
   imageScaleEl.addEventListener("input", (event) => {
-    const hadRenderedBanners = state.hasRenderedBanners;
     const raw = Number(event.target.value);
     if (!Number.isFinite(raw)) {
       updateActiveImagePosition({ imageScalePercent: IMAGE_SCALE_MIN });
@@ -3415,23 +3386,21 @@ if (imageScaleEl) {
       const snapped = Math.round((clamped - IMAGE_SCALE_MIN) / IMAGE_SCALE_STEP) * IMAGE_SCALE_STEP + IMAGE_SCALE_MIN;
       updateActiveImagePosition({ imageScalePercent: Math.max(IMAGE_SCALE_MIN, Math.min(IMAGE_SCALE_MAX, snapped)) });
     }
-    markImagePositionChanged(hadRenderedBanners);
+    markImagePositionChanged();
   });
 }
 
 if (imageShiftYEl) {
   imageShiftYEl.addEventListener("input", (event) => {
-    const hadRenderedBanners = state.hasRenderedBanners;
     updateActiveImagePosition({ imageShiftYStep: clampShiftStep(Number(event.target.value) || 0) });
-    markImagePositionChanged(hadRenderedBanners);
+    markImagePositionChanged();
   });
 }
 
 if (resetBannerShiftBtnEl) {
   resetBannerShiftBtnEl.addEventListener("click", () => {
-    const hadRenderedBanners = state.hasRenderedBanners;
     resetActiveBannerPosition();
-    markImagePositionChanged(hadRenderedBanners);
+    markImagePositionChanged();
   });
 }
 

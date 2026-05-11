@@ -4345,16 +4345,12 @@ def render_banner_images(
             )
         uncrop_country = "uploaded" if source_kind == "uploaded" else (country or cached_country or "other")
         try:
-            prepared_image_url, preprocess_debug = _prepare_image_for_uncrop(image_url, country=uncrop_country)
-            uncrop_debug["preprocess"] = preprocess_debug
-            if (
-                prepared_image_url == image_url
-                and cached_banner_source_url
-                and _is_cached_uncrop_current(cached_banner_source_url)
-            ):
+            if cached_banner_source_url and _is_cached_uncrop_current(cached_banner_source_url):
                 effective_image_url = cached_banner_source_url
                 uncrop_debug["used_cache"] = True
             else:
+                prepared_image_url, preprocess_debug = _prepare_image_for_uncrop(image_url, country=uncrop_country)
+                uncrop_debug["preprocess"] = preprocess_debug
                 uncrop_debug["attempted"] = True
                 effective_image_url = uncrop_image_with_clipdrop(prepared_image_url, country=uncrop_country)
                 update_image_library_banner_source(image_url, effective_image_url)
