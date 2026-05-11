@@ -103,6 +103,8 @@ const TEXT_ALIGN_OPTIONS = [
 ];
 const BANNER_LANGUAGE_OPTIONS = [
   { value: "general", label: "General" },
+  { value: "georgia", label: "Georgia" },
+  { value: "armenia", label: "Armenia" },
   { value: "ethiopia", label: "Ethiopia" },
   { value: "nepal", label: "Nepal" },
 ];

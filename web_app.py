@@ -2844,15 +2844,36 @@ def _scaled_font_size(size: int, scale: float = 1.0) -> int:
     return max(8, int(round(float(size) * float(scale or 1.0))))
 
 
-def _resolve_banner_typography(language: str) -> dict:
+def _resolve_banner_typography(language: str, brand: str = "yango") -> dict:
     fonts_dir = ROOT / "assets" / "fonts"
     normalized = str(language or "general").strip().lower()
+    normalized_brand = _normalize_brand_key(brand)
     default = {
-        "headline_font_path": fonts_dir / "YangoGroupHeadline-Heavy.ttf",
+        "headline_font_path": fonts_dir / (
+            "YSDisplayCond-Black.ttf" if normalized_brand == "yandex-go" else "YangoGroupHeadline-Heavy.ttf"
+        ),
         "text_bold_font_path": fonts_dir / "YangoGroupText-Bold.ttf",
         "text_regular_font_path": fonts_dir / "YangoGroupText-Regular.ttf",
         "font_scale": 1.0,
     }
+    if normalized == "georgia":
+        return {
+            "headline_font_path": fonts_dir / (
+                "YSDisplayCondGeorgia-BlackCondensed.ttf"
+                if normalized_brand == "yandex-go"
+                else "NotoSansGeorgian-CondensedBlack.ttf"
+            ),
+            "text_bold_font_path": fonts_dir / "NotoSansGeorgian-CondensedBold.ttf",
+            "text_regular_font_path": fonts_dir / "NotoSansGeorgian-CondensedRegular.ttf",
+            "font_scale": 0.9,
+        }
+    if normalized == "armenia":
+        return {
+            "headline_font_path": fonts_dir / "NotoSansArmenian-CondensedBlack.ttf",
+            "text_bold_font_path": fonts_dir / "NotoSansArmenian-CondensedBold.ttf",
+            "text_regular_font_path": fonts_dir / "NotoSansArmenian-CondensedRegular.ttf",
+            "font_scale": 0.9,
+        }
     if normalized == "ethiopia":
         return {
             "headline_font_path": fonts_dir / "NotoSansEthiopic-ExtraCondensedExtraBold.ttf",
@@ -3647,7 +3668,7 @@ def _render_master_banner_by_size(
     main_text_fill = "#000000" if variant == "black" else "white"
     disclaimer_rgb = (0, 0, 0) if variant == "black" else (255, 255, 255)
 
-    typography = _resolve_banner_typography(banner_language)
+    typography = _resolve_banner_typography(banner_language, brand=brand)
     headline_font_path = typography["headline_font_path"]
     headline_italic_font_path = ROOT / "assets" / "fonts" / "YangoGroupHeadline-HeavyItalic.ttf"
     text_bold_font_path = typography["text_bold_font_path"]
@@ -3663,6 +3684,10 @@ def _render_master_banner_by_size(
     title_text = title.strip() or default_title_text
     subtitle_text = subtitle.strip()
     disclaimer_text = disclaimer.strip() or default_disclaimer_text
+    title_display_text = title_text if _normalize_brand_key(brand) == "yandex-go" else title_text.upper()
+    default_title_display_text = (
+        default_title_text if _normalize_brand_key(brand) == "yandex-go" else default_title_text.upper()
+    )
     align_mode = _normalize_text_align(text_align)
     accent_hex = _normalize_hex_color(accent_color, "#E3FF74")
 
@@ -3698,7 +3723,7 @@ def _render_master_banner_by_size(
             current_h = (
                 _measure_wrapped_height(
                     draw,
-                    text=title_text.upper(),
+                    text=title_display_text,
                     font=title_font,
                     wrap_width=title_wrap,
                     line_height_ratio=0.9,
@@ -3721,7 +3746,7 @@ def _render_master_banner_by_size(
             base_h = (
                 _measure_wrapped_height(
                     draw,
-                    text=default_title_text.upper(),
+                    text=default_title_display_text,
                     font=title_font,
                     wrap_width=title_wrap,
                     line_height_ratio=0.9,
@@ -3797,7 +3822,7 @@ def _render_master_banner_by_size(
             height=height - 40,
             blocks=[
                 {
-                    "text": title_text.upper(),
+                    "text": title_display_text,
                     "font": title_font,
                     "ratio": 0.9,
                     "fill": main_text_fill,
@@ -3860,7 +3885,7 @@ def _render_master_banner_by_size(
             current_h = (
                 _measure_wrapped_height(
                     draw,
-                    text=title_text.upper(),
+                    text=title_display_text,
                     font=title_font,
                     wrap_width=title_wrap,
                     line_height_ratio=0.9,
@@ -3883,7 +3908,7 @@ def _render_master_banner_by_size(
             base_h = (
                 _measure_wrapped_height(
                     draw,
-                    text=default_title_text.upper(),
+                    text=default_title_display_text,
                     font=title_font,
                     wrap_width=title_wrap,
                     line_height_ratio=0.9,
@@ -3959,7 +3984,7 @@ def _render_master_banner_by_size(
             height=height - 80,
             blocks=[
                 {
-                    "text": title_text.upper(),
+                    "text": title_display_text,
                     "font": title_font,
                     "ratio": 0.9,
                     "fill": main_text_fill,
@@ -4044,7 +4069,7 @@ def _render_master_banner_by_size(
             valign="top",
             blocks=[
                 {
-                    "text": title_text.upper(),
+                    "text": title_display_text,
                     "font": title_font,
                     "ratio": 0.9,
                     "fill": main_text_fill,
@@ -4146,7 +4171,7 @@ def _render_master_banner_by_size(
         subtitle_width = 920
         disclaimer_width = 920
         has_subtitle = bool(subtitle_text.strip())
-        title_wrapped = _wrap_text_by_width(draw, title_text.upper(), title_font, title_width)
+        title_wrapped = _wrap_text_by_width(draw, title_display_text, title_font, title_width)
         subtitle_wrapped = _wrap_text_by_width(draw, subtitle_text, subtitle_font, subtitle_width) if has_subtitle else ""
         disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, disclaimer_width)
         title_h = _measure_multiline_with_ratio(draw, text=title_wrapped, font=title_font, line_height_ratio=0.9)
@@ -4182,7 +4207,7 @@ def _render_master_banner_by_size(
         )
         cursor_y = height - bottom_padding - total_h
         if badge_enabled:
-            base_title_wrapped = _wrap_text_by_width(draw, default_title_text.upper(), title_font, title_width)
+            base_title_wrapped = _wrap_text_by_width(draw, default_title_display_text, title_font, title_width)
             base_subtitle_wrapped = _wrap_text_by_width(draw, default_subtitle_text, subtitle_font, subtitle_width)
             base_disclaimer_wrapped = _wrap_text_by_width(draw, default_disclaimer_text, disclaimer_font, disclaimer_width)
             base_h = (
