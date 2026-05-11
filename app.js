@@ -286,6 +286,7 @@ const state = {
   activeBannerPositionKey: "",
   bannerImageOverrides: {},
   bannerBadgeOverrides: {},
+  bannerTextOverrides: {},
 };
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = IMAGE_REQUEST_TIMEOUT_MS) {
@@ -2255,6 +2256,36 @@ function getActiveBadgePositionValues() {
   return getBannerBadgeOverride(state.activeBannerPositionKey) || getTextSetBadgePositionValues(active.setIndex);
 }
 
+function getTextSetValues(setIndex) {
+  const set = state.bannerTextSets[setIndex] || {};
+  return {
+    title: String(set.title || ""),
+    subtitle: String(set.subtitle || ""),
+    disclaimer: String(set.disclaimer || ""),
+  };
+}
+
+function normalizeBannerTextValues(values, setIndex = 0) {
+  const defaults = getTextSetValues(setIndex);
+  return {
+    title: String(values?.title ?? defaults.title),
+    subtitle: String(values?.subtitle ?? defaults.subtitle),
+    disclaimer: String(values?.disclaimer ?? defaults.disclaimer),
+  };
+}
+
+function getBannerTextOverride(key) {
+  const parsed = parseBannerPositionKey(key);
+  if (!parsed || !state.bannerTextOverrides[key]) return null;
+  return normalizeBannerTextValues(state.bannerTextOverrides[key], parsed.setIndex);
+}
+
+function getActiveTextValuesForSet(setIndex) {
+  const active = parseBannerPositionKey(state.activeBannerPositionKey);
+  if (!active || active.setIndex !== setIndex) return getTextSetValues(setIndex);
+  return getBannerTextOverride(state.activeBannerPositionKey) || getTextSetValues(setIndex);
+}
+
 function updateActiveBadgePosition(partialValues) {
   const active = parseBannerPositionKey(state.activeBannerPositionKey);
   if (!active) return;
@@ -2268,6 +2299,21 @@ function updateActiveBadgePosition(partialValues) {
 function resetActiveBannerBadgePosition() {
   if (!parseBannerPositionKey(state.activeBannerPositionKey)) return;
   delete state.bannerBadgeOverrides[state.activeBannerPositionKey];
+}
+
+function updateActiveBannerText(partialValues) {
+  const active = parseBannerPositionKey(state.activeBannerPositionKey);
+  if (!active) return;
+  const currentValues = getBannerTextOverride(state.activeBannerPositionKey) || getTextSetValues(active.setIndex);
+  state.bannerTextOverrides[state.activeBannerPositionKey] = normalizeBannerTextValues({
+    ...currentValues,
+    ...partialValues,
+  }, active.setIndex);
+}
+
+function resetActiveBannerText() {
+  if (!parseBannerPositionKey(state.activeBannerPositionKey)) return;
+  delete state.bannerTextOverrides[state.activeBannerPositionKey];
 }
 
 function setActiveBannerPosition(setIndex, size) {
@@ -2341,6 +2387,17 @@ function reindexBannerBadgeOverridesAfterRemove(removedSetIndex) {
   state.bannerBadgeOverrides = nextOverrides;
 }
 
+function reindexBannerTextOverridesAfterRemove(removedSetIndex) {
+  const nextOverrides = {};
+  Object.entries(state.bannerTextOverrides || {}).forEach(([key, value]) => {
+    const parsed = parseBannerPositionKey(key);
+    if (!parsed || parsed.setIndex === removedSetIndex) return;
+    const nextSetIndex = parsed.setIndex > removedSetIndex ? parsed.setIndex - 1 : parsed.setIndex;
+    nextOverrides[makeBannerPositionKey(nextSetIndex, parsed.size)] = value;
+  });
+  state.bannerTextOverrides = nextOverrides;
+}
+
 function copyBannerImageOverridesToSet(fromSetIndex, toSetIndex) {
   Object.entries(state.bannerImageOverrides || {}).forEach(([key, value]) => {
     const parsed = parseBannerPositionKey(key);
@@ -2357,6 +2414,14 @@ function copyBannerBadgeOverridesToSet(fromSetIndex, toSetIndex) {
   });
 }
 
+function copyBannerTextOverridesToSet(fromSetIndex, toSetIndex) {
+  Object.entries(state.bannerTextOverrides || {}).forEach(([key, value]) => {
+    const parsed = parseBannerPositionKey(key);
+    if (!parsed || parsed.setIndex !== fromSetIndex) return;
+    state.bannerTextOverrides[makeBannerPositionKey(toSetIndex, parsed.size)] = { ...normalizeBannerTextValues(value, fromSetIndex) };
+  });
+}
+
 function markImagePositionChanged() {
   renderShiftControls();
   invalidateRenderedBanners();
@@ -2366,6 +2431,12 @@ function markImagePositionChanged() {
 
 function markBadgePositionChanged() {
   renderShiftControls();
+  invalidateRenderedBanners();
+  renderBannerSetsView();
+  renderTopAction();
+}
+
+function markTextChanged() {
   invalidateRenderedBanners();
   renderBannerSetsView();
   renderTopAction();
@@ -2388,6 +2459,21 @@ function updateBadgePositionForSet(setIndex, partialValues) {
   if (Object.prototype.hasOwnProperty.call(partialValues, "badgeShiftY")) {
     targetSet.badgeShiftY = clampBadgeShiftPercent(partialValues.badgeShiftY);
   }
+}
+
+function updateTextForSet(setIndex, partialValues) {
+  const active = parseBannerPositionKey(state.activeBannerPositionKey);
+  if (active && active.setIndex === setIndex) {
+    updateActiveBannerText(partialValues);
+    return;
+  }
+  const targetSet = state.bannerTextSets[setIndex];
+  if (!targetSet) return;
+  ["title", "subtitle", "disclaimer"].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(partialValues, key)) {
+      targetSet[key] = String(partialValues[key] ?? "");
+    }
+  });
 }
 
 function getImageShiftStepCount() {
@@ -2481,6 +2567,7 @@ function renderTextSetsEditor() {
         state.bannerTextSets.splice(index, 1);
         reindexBannerImageOverridesAfterRemove(index);
         reindexBannerBadgeOverridesAfterRemove(index);
+        reindexBannerTextOverridesAfterRemove(index);
         invalidateRenderedBanners();
         renderTextSetsEditor();
         renderShiftControls();
@@ -2526,6 +2613,36 @@ function renderTextSetsEditor() {
       { key: "disclaimer", label: "Disclaimer" },
     ];
 
+    const activeTextTarget = parseBannerPositionKey(state.activeBannerPositionKey);
+    const isEditingSpecificText = Boolean(activeTextTarget && activeTextTarget.setIndex === index);
+    const textValues = getActiveTextValuesForSet(index);
+    const textScopeRow = document.createElement("div");
+    textScopeRow.className = "shift-scope-row text-edit-scope-row";
+    const textScopeLabel = document.createElement("span");
+    textScopeLabel.className = "shift-scope-label text-scope-label";
+    if (isEditingSpecificText) {
+      textScopeLabel.classList.add("is-banner-specific");
+      textScopeLabel.textContent = `Editing text · ${activeTextTarget.size}`;
+    } else {
+      textScopeLabel.textContent = "Default text for this set";
+    }
+    textScopeRow.appendChild(textScopeLabel);
+    let resetTextBtn = null;
+    if (isEditingSpecificText) {
+      resetTextBtn = document.createElement("button");
+      resetTextBtn.type = "button";
+      resetTextBtn.className = "shift-reset-btn";
+      resetTextBtn.textContent = "Reset text";
+      resetTextBtn.disabled = !state.bannerTextOverrides[state.activeBannerPositionKey];
+      resetTextBtn.addEventListener("click", () => {
+        resetActiveBannerText();
+        renderTextSetsEditor();
+        markTextChanged();
+      });
+      textScopeRow.appendChild(resetTextBtn);
+    }
+    card.appendChild(textScopeRow);
+
     fields.forEach((field) => {
       const fieldWrap = document.createElement("div");
       fieldWrap.className = "text-set-field";
@@ -2535,13 +2652,12 @@ function renderTextSetsEditor() {
       const textarea = document.createElement("textarea");
       textarea.className = "text-area";
       textarea.rows = field.key === "subtitle" ? 2 : 1;
-      textarea.value = set[field.key] || "";
+      textarea.value = textValues[field.key] || "";
       textarea.addEventListener("input", (event) => {
         autoResizeTextarea(textarea);
-        state.bannerTextSets[index][field.key] = event.target.value;
-        invalidateRenderedBanners();
-        renderBannerSetsView();
-        renderTopAction();
+        updateTextForSet(index, { [field.key]: event.target.value });
+        if (resetTextBtn) resetTextBtn.disabled = false;
+        markTextChanged();
       });
       fieldWrap.appendChild(label);
       fieldWrap.appendChild(textarea);
@@ -2764,7 +2880,9 @@ function makeSlot(size, url, isLoading, setIndex = 0) {
   const key = makeBannerPositionKey(setIndex, size);
   slot.className = `banner-slot ${BANNER_SIZES.find((s) => s.value === size)?.slotClass || ""}`;
   if (state.activeBannerPositionKey === key) slot.classList.add("is-active");
-  if (state.bannerImageOverrides[key] || state.bannerBadgeOverrides[key]) slot.classList.add("has-position-override");
+  if (state.bannerImageOverrides[key] || state.bannerBadgeOverrides[key] || state.bannerTextOverrides[key]) {
+    slot.classList.add("has-position-override");
+  }
   slot.setAttribute("tabindex", "0");
   slot.setAttribute("role", "button");
   slot.setAttribute("aria-label", `Edit image position for set ${setIndex + 1}, ${size}`);
@@ -3127,6 +3245,20 @@ function buildRenderPayload() {
       };
     })
     .filter(Boolean);
+  const bannerTextOverrides = Object.entries(state.bannerTextOverrides || {})
+    .map(([key, values]) => {
+      const parsed = parseBannerPositionKey(key);
+      if (!parsed) return null;
+      const normalized = normalizeBannerTextValues(values, parsed.setIndex);
+      return {
+        textSetIndex: parsed.setIndex,
+        size: parsed.size,
+        title: normalized.title.trim(),
+        subtitle: normalized.subtitle.trim(),
+        disclaimer: normalized.disclaimer.trim(),
+      };
+    })
+    .filter(Boolean);
   return {
     imageUrl: state.bannerSourceImageUrl,
     bannerSourceUrl: selectedLibraryImage?.banner_source_url || "",
@@ -3155,6 +3287,7 @@ function buildRenderPayload() {
     sizes: getActiveBannerSizes(),
     bannerImageOverrides,
     bannerBadgeOverrides,
+    bannerTextOverrides,
   };
 }
 
@@ -3931,6 +4064,7 @@ addTextSetBtn.addEventListener("click", () => {
   if (sourceIndex >= 0) {
     copyBannerImageOverridesToSet(sourceIndex, nextSetIndex);
     copyBannerBadgeOverridesToSet(sourceIndex, nextSetIndex);
+    copyBannerTextOverridesToSet(sourceIndex, nextSetIndex);
   }
   invalidateRenderedBanners();
   renderTextSetsEditor();

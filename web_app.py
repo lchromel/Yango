@@ -5444,6 +5444,9 @@ def render_banner_images(
             render_badge_shift_x = int(override.get("badge_shift_x", badge_shift_x))
             render_badge_shift_y = int(override.get("badge_shift_y", badge_shift_y))
             render_badge_scale = float(override.get("badge_scale", badge_scale))
+            render_title = str(override.get("title", title))
+            render_subtitle = str(override.get("subtitle", subtitle))
+            render_disclaimer = str(override.get("disclaimer", disclaimer))
 
             if normalized_layout not in {"photo", "black", "white"} and not _is_frame_layout_variant(normalized_layout):
                 normalized_layout = "photo"
@@ -5451,9 +5454,9 @@ def render_banner_images(
                 bg_image=source_image,
                 size_key=size_key,
                 layout_variant=normalized_layout,
-                title=title,
-                subtitle=subtitle,
-                disclaimer=disclaimer,
+                title=render_title,
+                subtitle=render_subtitle,
+                disclaimer=render_disclaimer,
                 text_align=text_align,
                 badge_enabled=badge_enabled,
                 badge_top_text=badge_top_text,
@@ -6065,6 +6068,29 @@ class Handler(SimpleHTTPRequestHandler):
                     override_bucket["badge_shift_x"] = max(0, min(100, override_badge_shift_x))
                     override_bucket["badge_shift_y"] = max(0, min(100, override_badge_shift_y))
                     override_bucket["badge_scale"] = override_badge_scale
+            raw_text_overrides = body.get("bannerTextOverrides", [])
+            if isinstance(raw_text_overrides, list):
+                for raw_override in raw_text_overrides:
+                    if not isinstance(raw_override, dict):
+                        continue
+                    try:
+                        override_set_index = int(raw_override.get("textSetIndex", raw_override.get("setIndex", 0)) or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    override_size = str(raw_override.get("size", "")).strip()
+                    if override_set_index < 0 or override_size not in BANNER_SIZE_MAP:
+                        continue
+                    override_bucket = banner_image_overrides.setdefault(
+                        (override_set_index, override_size),
+                        {
+                            "image_scale": image_scale,
+                            "image_shift_x": image_shift_x,
+                            "image_shift_y": image_shift_y,
+                        },
+                    )
+                    for field_name in ("title", "subtitle", "disclaimer"):
+                        if field_name in raw_override:
+                            override_bucket[field_name] = str(raw_override.get(field_name, "")).strip()
             sizes = body.get("sizes", [])
             if not isinstance(sizes, list):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "sizes must be an array"})

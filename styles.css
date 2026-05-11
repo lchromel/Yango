@@ -662,6 +662,18 @@ body {
   min-height: 24px;
 }
 
+.text-edit-scope-row {
+  margin-top: 8px;
+}
+
+.text-scope-label {
+  color: rgba(14, 14, 14, 0.6);
+}
+
+.text-scope-label.is-banner-specific {
+  color: #0e0e0e;
+}
+
 .badge-scope-label {
   color: rgba(14, 14, 14, 0.6);
 }
