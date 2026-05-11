@@ -77,6 +77,11 @@ YANDEX_GO_LOGO_ASSET_BY_VARIANT = {
     "en-ar": "YandexGO_EN-AR",
     "ru": "YandexGO_RU",
 }
+BRAND_ICON_ASSET_BY_KEY = {
+    "yango": "Yango_icon_4x.png",
+    "yango-pro": "YangoPro_icon_4x.png",
+    "yandex-go": "YandexGo_icon_4x.png",
+}
 UNCROP_TARGET_WIDTH = 3200
 UNCROP_TARGET_HEIGHT = 2472
 UNCROP_MIN_HORIZONTAL_MARGIN = 262
@@ -909,6 +914,8 @@ def _brand_logo_text(brand: str) -> str:
 
 def _normalize_banner_logo_variant(logo_variant: str) -> str:
     normalized = str(logo_variant or "").strip().lower().replace("_", "-")
+    if normalized in {"icon", "app-icon", "go-icon"}:
+        return "icon"
     if normalized in {"eng", "english", "yandex-go-en"}:
         return "en"
     if normalized in {"armenia", "armenian", "yandex-go-ar"}:
@@ -925,6 +932,8 @@ def _normalize_banner_logo_variant(logo_variant: str) -> str:
 def _effective_yandex_go_logo_variant(brand: str, logo_variant: str) -> str:
     normalized_brand = _normalize_brand_key(brand)
     normalized_variant = _normalize_banner_logo_variant(logo_variant)
+    if normalized_variant == "icon":
+        return ""
     if normalized_variant:
         return normalized_variant
     if normalized_brand == "yandex-go":
@@ -969,6 +978,35 @@ def _load_yandex_go_logo_image(variant: str, color: str, target_height: int) -> 
     ratio = target_height / max(1, logo.height)
     target_width = max(1, int(round(logo.width * ratio)))
     return logo.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+
+def _uses_brand_icon_layout(brand: str, logo_variant: str = "") -> bool:
+    normalized_brand = _normalize_brand_key(brand)
+    if normalized_brand in {"yango", "yango-pro"}:
+        return True
+    return normalized_brand == "yandex-go" and _normalize_banner_logo_variant(logo_variant) == "icon"
+
+
+@lru_cache(maxsize=24)
+def _load_brand_icon_image(brand: str, target_size: int) -> Optional[Image.Image]:
+    asset_name = BRAND_ICON_ASSET_BY_KEY.get(_normalize_brand_key(brand))
+    if not asset_name:
+        return None
+    asset_path = ROOT / "assets" / "logos" / asset_name
+    if not asset_path.exists():
+        return None
+    target_size = max(1, int(target_size or 1))
+    with Image.open(asset_path) as icon_image:
+        icon = icon_image.convert("RGBA")
+    return icon.resize((target_size, target_size), Image.Resampling.LANCZOS)
+
+
+def _draw_brand_icon(canvas: Image.Image, *, brand: str, x: int, y: int, size: int) -> bool:
+    icon = _load_brand_icon_image(brand, size)
+    if icon is None:
+        return False
+    canvas.alpha_composite(icon, (int(x), int(y)))
+    return True
 
 
 def _measure_banner_logo(
@@ -3785,34 +3823,45 @@ def _render_master_banner_by_size(
                 target_bottom_y=badge_target_bottom_y,
             )
 
-        logo_target_h = int(round(logo_font.size * 0.88))
-        logo_w, _, _ = _measure_banner_logo(
-            draw,
-            brand=brand,
-            logo_variant=logo_variant,
-            logo_text=logo_text,
-            logo_font=logo_font,
-            fill=main_text_fill,
-            target_height=logo_target_h,
-        )
-        if align_mode == "center":
-            logo_x = (width - logo_w) // 2
-        elif align_mode == "right":
-            logo_x = width - 80 - logo_w
+        if _uses_brand_icon_layout(brand, logo_variant):
+            icon_size = 164
+            if align_mode == "center":
+                icon_x = (width - icon_size) // 2
+            elif align_mode == "right":
+                icon_x = width - 80 - icon_size
+            else:
+                icon_x = 80
+            if not _draw_brand_icon(canvas, brand=brand, x=icon_x, y=80, size=icon_size):
+                draw.text((icon_x, 80), logo_text, fill=main_text_fill, font=logo_font)
         else:
-            logo_x = 80
-        _draw_banner_logo(
-            canvas,
-            draw,
-            x=logo_x,
-            y=80,
-            brand=brand,
-            logo_variant=logo_variant,
-            logo_text=logo_text,
-            logo_font=logo_font,
-            fill=main_text_fill,
-            target_height=logo_target_h,
-        )
+            logo_target_h = int(round(logo_font.size * 0.88))
+            logo_w, _, _ = _measure_banner_logo(
+                draw,
+                brand=brand,
+                logo_variant=logo_variant,
+                logo_text=logo_text,
+                logo_font=logo_font,
+                fill=main_text_fill,
+                target_height=logo_target_h,
+            )
+            if align_mode == "center":
+                logo_x = (width - logo_w) // 2
+            elif align_mode == "right":
+                logo_x = width - 80 - logo_w
+            else:
+                logo_x = 80
+            _draw_banner_logo(
+                canvas,
+                draw,
+                x=logo_x,
+                y=80,
+                brand=brand,
+                logo_variant=logo_variant,
+                logo_text=logo_text,
+                logo_font=logo_font,
+                fill=main_text_fill,
+                target_height=logo_target_h,
+            )
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -3947,34 +3996,45 @@ def _render_master_banner_by_size(
                 target_bottom_y=badge_target_bottom_y,
             )
 
-        logo_target_h = int(round(logo_font.size * 0.88))
-        logo_w, _, _ = _measure_banner_logo(
-            draw,
-            brand=brand,
-            logo_variant=logo_variant,
-            logo_text=logo_text,
-            logo_font=logo_font,
-            fill=main_text_fill,
-            target_height=logo_target_h,
-        )
-        if align_mode == "center":
-            logo_x = (width - logo_w) // 2
-        elif align_mode == "right":
-            logo_x = width - 80 - logo_w
+        if _uses_brand_icon_layout(brand, logo_variant):
+            icon_size = 164
+            if align_mode == "center":
+                icon_x = (width - icon_size) // 2
+            elif align_mode == "right":
+                icon_x = width - 80 - icon_size
+            else:
+                icon_x = 80
+            if not _draw_brand_icon(canvas, brand=brand, x=icon_x, y=80, size=icon_size):
+                draw.text((icon_x, 80), logo_text, fill=main_text_fill, font=logo_font)
         else:
-            logo_x = 80
-        _draw_banner_logo(
-            canvas,
-            draw,
-            x=logo_x,
-            y=80,
-            brand=brand,
-            logo_variant=logo_variant,
-            logo_text=logo_text,
-            logo_font=logo_font,
-            fill=main_text_fill,
-            target_height=logo_target_h,
-        )
+            logo_target_h = int(round(logo_font.size * 0.88))
+            logo_w, _, _ = _measure_banner_logo(
+                draw,
+                brand=brand,
+                logo_variant=logo_variant,
+                logo_text=logo_text,
+                logo_font=logo_font,
+                fill=main_text_fill,
+                target_height=logo_target_h,
+            )
+            if align_mode == "center":
+                logo_x = (width - logo_w) // 2
+            elif align_mode == "right":
+                logo_x = width - 80 - logo_w
+            else:
+                logo_x = 80
+            _draw_banner_logo(
+                canvas,
+                draw,
+                x=logo_x,
+                y=80,
+                brand=brand,
+                logo_variant=logo_variant,
+                logo_text=logo_text,
+                logo_font=logo_font,
+                fill=main_text_fill,
+                target_height=logo_target_h,
+            )
         _layout_bottom_blocks(
             canvas,
             draw,
@@ -4089,36 +4149,48 @@ def _render_master_banner_by_size(
             ],
             highlight_hex=accent_hex,
         )
-        logo_target_h = int(round(logo_font.size * 0.88))
-        logo_w, logo_h, _ = _measure_banner_logo(
-            draw,
-            brand=brand,
-            logo_variant=logo_variant,
-            logo_text=logo_text,
-            logo_font=logo_font,
-            fill=main_text_fill,
-            target_height=logo_target_h,
-        )
         bottom_padding = 32
-        logo_y = height - bottom_padding - logo_h
-        if align_mode == "center":
-            logo_x = 32 + (636 - logo_w) // 2
-        elif align_mode == "right":
-            logo_x = width - 32 - logo_w
+        if _uses_brand_icon_layout(brand, logo_variant):
+            icon_size = 112
+            icon_y = height - bottom_padding - icon_size
+            if align_mode == "center":
+                icon_x = 32 + (636 - icon_size) // 2
+            elif align_mode == "right":
+                icon_x = width - 32 - icon_size
+            else:
+                icon_x = 32
+            if not _draw_brand_icon(canvas, brand=brand, x=icon_x, y=icon_y, size=icon_size):
+                draw.text((icon_x, icon_y), logo_text, fill=main_text_fill, font=logo_font)
         else:
-            logo_x = 32
-        _draw_banner_logo(
-            canvas,
-            draw,
-            x=logo_x,
-            y=logo_y,
-            brand=brand,
-            logo_variant=logo_variant,
-            logo_text=logo_text,
-            logo_font=logo_font,
-            fill=main_text_fill,
-            target_height=logo_target_h,
-        )
+            logo_target_h = int(round(logo_font.size * 0.88))
+            logo_w, logo_h, _ = _measure_banner_logo(
+                draw,
+                brand=brand,
+                logo_variant=logo_variant,
+                logo_text=logo_text,
+                logo_font=logo_font,
+                fill=main_text_fill,
+                target_height=logo_target_h,
+            )
+            logo_y = height - bottom_padding - logo_h
+            if align_mode == "center":
+                logo_x = 32 + (636 - logo_w) // 2
+            elif align_mode == "right":
+                logo_x = width - 32 - logo_w
+            else:
+                logo_x = 32
+            _draw_banner_logo(
+                canvas,
+                draw,
+                x=logo_x,
+                y=logo_y,
+                brand=brand,
+                logo_variant=logo_variant,
+                logo_text=logo_text,
+                logo_font=logo_font,
+                fill=main_text_fill,
+                target_height=logo_target_h,
+            )
         disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, 511)
         disclaimer_h = _measure_multiline_with_ratio(
             draw,
@@ -4167,135 +4239,220 @@ def _render_master_banner_by_size(
         subtitle_font = _load_font(text_bold_font_path, _scaled_font_size(52, banner_font_scale))
         disclaimer_font = _load_font(text_regular_font_path, _scaled_font_size(16, banner_font_scale))
 
-        title_width = 920
-        subtitle_width = 920
-        disclaimer_width = 920
-        has_subtitle = bool(subtitle_text.strip())
-        title_wrapped = _wrap_text_by_width(draw, title_display_text, title_font, title_width)
-        subtitle_wrapped = _wrap_text_by_width(draw, subtitle_text, subtitle_font, subtitle_width) if has_subtitle else ""
-        disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, disclaimer_width)
-        title_h = _measure_multiline_with_ratio(draw, text=title_wrapped, font=title_font, line_height_ratio=0.9)
-        subtitle_h = (
-            _measure_multiline_with_ratio(draw, text=subtitle_wrapped, font=subtitle_font, line_height_ratio=1.1)
-            if has_subtitle
-            else 0
-        )
-        disclaimer_h = _measure_multiline_with_ratio(draw, text=disclaimer_wrapped, font=disclaimer_font, line_height_ratio=1.28)
-        logo_target_h = int(round(logo_font.size * 0.88))
-        logo_w, logo_h, _ = _measure_banner_logo(
-            draw,
-            brand=brand,
-            logo_variant=logo_variant,
-            logo_text=logo_text,
-            logo_font=logo_font,
-            fill=main_text_fill,
-            target_height=logo_target_h,
-        )
+        if _uses_brand_icon_layout(brand, logo_variant):
+            content_width = 820
+            if align_mode == "center":
+                content_x = (width - content_width) // 2
+            elif align_mode == "right":
+                content_x = width - 80 - content_width
+            else:
+                content_x = 80
 
-        gap_title_subtitle = 48
-        gap_subtitle_logo = 80
-        gap_logo_disclaimer = 150
-        bottom_padding = 80
-        total_h = (
-            title_h
-            + (gap_title_subtitle if has_subtitle else 0)
-            + subtitle_h
-            + gap_subtitle_logo
-            + logo_h
-            + gap_logo_disclaimer
-            + disclaimer_h
-        )
-        cursor_y = height - bottom_padding - total_h
-        if badge_enabled:
-            base_title_wrapped = _wrap_text_by_width(draw, default_title_display_text, title_font, title_width)
-            base_subtitle_wrapped = _wrap_text_by_width(draw, default_subtitle_text, subtitle_font, subtitle_width)
-            base_disclaimer_wrapped = _wrap_text_by_width(draw, default_disclaimer_text, disclaimer_font, disclaimer_width)
-            base_h = (
-                _measure_multiline_with_ratio(draw, text=base_title_wrapped, font=title_font, line_height_ratio=0.9)
-                + _measure_multiline_with_ratio(draw, text=base_subtitle_wrapped, font=subtitle_font, line_height_ratio=1.1)
-                + _measure_multiline_with_ratio(draw, text=base_disclaimer_wrapped, font=disclaimer_font, line_height_ratio=1.28)
+            title_width = content_width
+            subtitle_width = content_width
+            icon_size = 164
+            icon_y = height - 80 - icon_size
+            icon_x = content_x
+            disclaimer_width = content_width - icon_size - 24
+            disclaimer_x = icon_x + icon_size + 24
+            has_subtitle = bool(subtitle_text.strip())
+            title_wrapped = _wrap_text_by_width(draw, title_display_text, title_font, title_width)
+            subtitle_wrapped = _wrap_text_by_width(draw, subtitle_text, subtitle_font, subtitle_width) if has_subtitle else ""
+            disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, disclaimer_width)
+            title_h = _measure_multiline_with_ratio(draw, text=title_wrapped, font=title_font, line_height_ratio=0.9)
+            subtitle_h = (
+                _measure_multiline_with_ratio(draw, text=subtitle_wrapped, font=subtitle_font, line_height_ratio=1.1)
+                if has_subtitle
+                else 0
             )
-            current_h = title_h + subtitle_h + disclaimer_h
-            badge_target_bottom_y = int(round(cursor_y)) - 8
-            badge_lift = 0
-            _draw_price_badge(
+            disclaimer_h = _measure_multiline_with_ratio(
+                draw, text=disclaimer_wrapped, font=disclaimer_font, line_height_ratio=1.28
+            )
+
+            gap_title_subtitle = 48
+            gap_subtitle_icon = 80
+            text_h = title_h + (gap_title_subtitle if has_subtitle else 0) + subtitle_h
+            cursor_y = icon_y - gap_subtitle_icon - text_h
+            if badge_enabled:
+                _draw_price_badge(
+                    canvas,
+                    size_key=size_key,
+                    top_text=badge_top_text,
+                    bottom_text=badge_bottom_text,
+                    text_align=align_mode,
+                    headline_font_path=headline_font_path,
+                    font_scale=banner_font_scale,
+                    badge_fill_hex=accent_hex,
+                    shift_right_px=max(0, int(badge_shift_x or 0)),
+                    shift_up_px=max(0, int(badge_shift_y or 0)),
+                    target_bottom_y=int(round(cursor_y)) - 8,
+                )
+
+            text_draw_align = "center" if align_mode == "center" else ("right" if align_mode == "right" else "left")
+            _draw_multiline_with_ratio(
                 canvas,
-                size_key=size_key,
-                top_text=badge_top_text,
-                bottom_text=badge_bottom_text,
-                text_align=align_mode,
-                headline_font_path=headline_font_path,
-                font_scale=banner_font_scale,
-                badge_fill_hex=accent_hex,
-                shift_right_px=max(0, int(badge_shift_x or 0)),
-                shift_up_px=max(0, int(badge_shift_y or 0)),
-                y_shift=-badge_lift,
-                target_bottom_y=badge_target_bottom_y,
+                draw,
+                x=content_x,
+                y=int(cursor_y),
+                text=title_wrapped,
+                font=title_font,
+                fill=main_text_fill,
+                line_height_ratio=0.9,
+                box_width=title_width,
+                align=text_draw_align,
+                highlight_hex=accent_hex,
+            )
+            cursor_y += title_h
+            if has_subtitle:
+                cursor_y += gap_title_subtitle
+                _draw_multiline_with_ratio(
+                    canvas,
+                    draw,
+                    x=content_x,
+                    y=int(cursor_y),
+                    text=subtitle_wrapped,
+                    font=subtitle_font,
+                    fill=main_text_fill,
+                    line_height_ratio=1.1,
+                    box_width=subtitle_width,
+                    align=text_draw_align,
+                    highlight_hex=accent_hex,
+                )
+
+            if not _draw_brand_icon(canvas, brand=brand, x=icon_x, y=icon_y, size=icon_size):
+                draw.text((icon_x, icon_y), logo_text, fill=main_text_fill, font=logo_font)
+            _draw_multiline_with_ratio(
+                canvas,
+                draw,
+                x=disclaimer_x,
+                y=int(icon_y + icon_size - disclaimer_h),
+                text=disclaimer_wrapped,
+                font=disclaimer_font,
+                fill=(*disclaimer_rgb, 204),
+                line_height_ratio=1.28,
+                box_width=disclaimer_width,
+                align="left",
+                highlight_hex=accent_hex,
+            )
+        else:
+            title_width = 920
+            subtitle_width = 920
+            disclaimer_width = 920
+            has_subtitle = bool(subtitle_text.strip())
+            title_wrapped = _wrap_text_by_width(draw, title_display_text, title_font, title_width)
+            subtitle_wrapped = _wrap_text_by_width(draw, subtitle_text, subtitle_font, subtitle_width) if has_subtitle else ""
+            disclaimer_wrapped = _wrap_text_by_width(draw, disclaimer_text, disclaimer_font, disclaimer_width)
+            title_h = _measure_multiline_with_ratio(draw, text=title_wrapped, font=title_font, line_height_ratio=0.9)
+            subtitle_h = (
+                _measure_multiline_with_ratio(draw, text=subtitle_wrapped, font=subtitle_font, line_height_ratio=1.1)
+                if has_subtitle
+                else 0
+            )
+            disclaimer_h = _measure_multiline_with_ratio(draw, text=disclaimer_wrapped, font=disclaimer_font, line_height_ratio=1.28)
+            logo_target_h = int(round(logo_font.size * 0.88))
+            logo_w, logo_h, _ = _measure_banner_logo(
+                draw,
+                brand=brand,
+                logo_variant=logo_variant,
+                logo_text=logo_text,
+                logo_font=logo_font,
+                fill=main_text_fill,
+                target_height=logo_target_h,
             )
 
-        _draw_multiline_with_ratio(
-            canvas,
-            draw,
-            x=80,
-            y=int(cursor_y),
-            text=title_wrapped,
-            font=title_font,
-            fill=main_text_fill,
-            line_height_ratio=0.9,
-            box_width=title_width,
-            align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
-            highlight_hex=accent_hex,
-        )
-        cursor_y += title_h
-        if has_subtitle:
-            cursor_y += gap_title_subtitle
+            gap_title_subtitle = 48
+            gap_subtitle_logo = 80
+            gap_logo_disclaimer = 150
+            bottom_padding = 80
+            total_h = (
+                title_h
+                + (gap_title_subtitle if has_subtitle else 0)
+                + subtitle_h
+                + gap_subtitle_logo
+                + logo_h
+                + gap_logo_disclaimer
+                + disclaimer_h
+            )
+            cursor_y = height - bottom_padding - total_h
+            if badge_enabled:
+                badge_target_bottom_y = int(round(cursor_y)) - 8
+                _draw_price_badge(
+                    canvas,
+                    size_key=size_key,
+                    top_text=badge_top_text,
+                    bottom_text=badge_bottom_text,
+                    text_align=align_mode,
+                    headline_font_path=headline_font_path,
+                    font_scale=banner_font_scale,
+                    badge_fill_hex=accent_hex,
+                    shift_right_px=max(0, int(badge_shift_x or 0)),
+                    shift_up_px=max(0, int(badge_shift_y or 0)),
+                    target_bottom_y=badge_target_bottom_y,
+                )
+
             _draw_multiline_with_ratio(
                 canvas,
                 draw,
                 x=80,
                 y=int(cursor_y),
-                text=subtitle_wrapped,
-                font=subtitle_font,
+                text=title_wrapped,
+                font=title_font,
                 fill=main_text_fill,
-                line_height_ratio=1.1,
-                box_width=subtitle_width,
+                line_height_ratio=0.9,
+                box_width=title_width,
                 align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
                 highlight_hex=accent_hex,
             )
-            cursor_y += subtitle_h
-        cursor_y += gap_subtitle_logo
-        if align_mode == "center":
-            logo_x = (width - logo_w) // 2
-        elif align_mode == "right":
-            logo_x = width - 80 - logo_w
-        else:
-            logo_x = 80
-        _draw_banner_logo(
-            canvas,
-            draw,
-            x=logo_x,
-            y=int(cursor_y),
-            brand=brand,
-            logo_variant=logo_variant,
-            logo_text=logo_text,
-            logo_font=logo_font,
-            fill=main_text_fill,
-            target_height=logo_target_h,
-        )
-        cursor_y += logo_h + gap_logo_disclaimer
-        _draw_multiline_with_ratio(
-            canvas,
-            draw,
-            x=80,
-            y=int(cursor_y),
-            text=disclaimer_wrapped,
-            font=disclaimer_font,
-            fill=(*disclaimer_rgb, 77),
-            line_height_ratio=1.28,
-            box_width=disclaimer_width,
-            align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
-            highlight_hex=accent_hex,
-        )
+            cursor_y += title_h
+            if has_subtitle:
+                cursor_y += gap_title_subtitle
+                _draw_multiline_with_ratio(
+                    canvas,
+                    draw,
+                    x=80,
+                    y=int(cursor_y),
+                    text=subtitle_wrapped,
+                    font=subtitle_font,
+                    fill=main_text_fill,
+                    line_height_ratio=1.1,
+                    box_width=subtitle_width,
+                    align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
+                    highlight_hex=accent_hex,
+                )
+                cursor_y += subtitle_h
+            cursor_y += gap_subtitle_logo
+            if align_mode == "center":
+                logo_x = (width - logo_w) // 2
+            elif align_mode == "right":
+                logo_x = width - 80 - logo_w
+            else:
+                logo_x = 80
+            _draw_banner_logo(
+                canvas,
+                draw,
+                x=logo_x,
+                y=int(cursor_y),
+                brand=brand,
+                logo_variant=logo_variant,
+                logo_text=logo_text,
+                logo_font=logo_font,
+                fill=main_text_fill,
+                target_height=logo_target_h,
+            )
+            cursor_y += logo_h + gap_logo_disclaimer
+            _draw_multiline_with_ratio(
+                canvas,
+                draw,
+                x=80,
+                y=int(cursor_y),
+                text=disclaimer_wrapped,
+                font=disclaimer_font,
+                fill=(*disclaimer_rgb, 77),
+                line_height_ratio=1.28,
+                box_width=disclaimer_width,
+                align="center" if align_mode == "center" else ("right" if align_mode == "right" else "left"),
+                highlight_hex=accent_hex,
+            )
 
     return canvas.convert("RGB")
 

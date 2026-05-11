@@ -68,6 +68,7 @@ const BANNER_BRAND_OPTIONS = [
   { label: "Yango Pro", value: "yango-pro" },
 ];
 const YANDEX_GO_LOGO_OPTIONS = [
+  { label: "Icon", value: "icon" },
   { label: "English", value: "en" },
   { label: "Armenia", value: "ar" },
   { label: "Georgia", value: "ge" },
