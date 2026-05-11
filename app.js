@@ -186,6 +186,12 @@ const IMAGE_SCALE_MAX = 150;
 const FRAME_IMAGE_SCALE_DEFAULT = 100;
 const FRAME_IMAGE_SCALE_MAX = 350;
 const IMAGE_SCALE_STEP = 3;
+const BADGE_SCALE_MIN = 70;
+const BADGE_SCALE_MAX = 150;
+const BADGE_SCALE_STEP = 5;
+const BADGE_SHIFT_MIN = 0;
+const BADGE_SHIFT_MAX = 100;
+const BADGE_SHIFT_STEP = 10;
 const CUSTOM_ACCENT_TRIGGER_WINDOW_MS = 550;
 const CUSTOM_ACCENT_TRIGGER_TAP_COUNT = 3;
 const VIDEO_TAB_ENABLED = true;
@@ -267,6 +273,7 @@ const state = {
       badgeBottomText: "65 AED",
       badgeShiftX: 0,
       badgeShiftY: 0,
+      badgeScalePercent: 100,
     },
   ],
   bannerStage: "idle",
@@ -278,6 +285,7 @@ const state = {
   imageShiftYStep: 0,
   activeBannerPositionKey: "",
   bannerImageOverrides: {},
+  bannerBadgeOverrides: {},
 };
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = IMAGE_REQUEST_TIMEOUT_MS) {
@@ -2215,11 +2223,67 @@ function getActiveImagePositionValues() {
   return getBannerImageOverride(state.activeBannerPositionKey) || getGlobalImagePositionValues();
 }
 
+function getTextSetBadgePositionValues(setIndex) {
+  const set = state.bannerTextSets[setIndex] || {};
+  const rawScale = set.badgeScalePercent ?? set.badgeScale ?? 100;
+  return {
+    badgeShiftX: clampBadgeShiftPercent(Number(set.badgeShiftX) || 0),
+    badgeShiftY: clampBadgeShiftPercent(Number(set.badgeShiftY) || 0),
+    badgeScalePercent: normalizeBadgeScalePercent(rawScale),
+  };
+}
+
+function normalizeBadgePositionValues(values, setIndex = 0) {
+  const defaults = getTextSetBadgePositionValues(setIndex);
+  const rawScale = values?.badgeScalePercent ?? values?.scalePercent ?? values?.badgeScale ?? defaults.badgeScalePercent;
+  return {
+    badgeShiftX: clampBadgeShiftPercent(Number(values?.badgeShiftX ?? values?.x ?? defaults.badgeShiftX) || 0),
+    badgeShiftY: clampBadgeShiftPercent(Number(values?.badgeShiftY ?? values?.y ?? defaults.badgeShiftY) || 0),
+    badgeScalePercent: normalizeBadgeScalePercent(rawScale, defaults.badgeScalePercent),
+  };
+}
+
+function getBannerBadgeOverride(key) {
+  const parsed = parseBannerPositionKey(key);
+  if (!parsed || !state.bannerBadgeOverrides[key]) return null;
+  return normalizeBadgePositionValues(state.bannerBadgeOverrides[key], parsed.setIndex);
+}
+
+function getActiveBadgePositionValues() {
+  const active = parseBannerPositionKey(state.activeBannerPositionKey);
+  if (!active) return null;
+  return getBannerBadgeOverride(state.activeBannerPositionKey) || getTextSetBadgePositionValues(active.setIndex);
+}
+
+function updateActiveBadgePosition(partialValues) {
+  const active = parseBannerPositionKey(state.activeBannerPositionKey);
+  if (!active) return;
+  const currentValues = getBannerBadgeOverride(state.activeBannerPositionKey) || getTextSetBadgePositionValues(active.setIndex);
+  state.bannerBadgeOverrides[state.activeBannerPositionKey] = normalizeBadgePositionValues({
+    ...currentValues,
+    ...partialValues,
+  }, active.setIndex);
+}
+
+function resetActiveBannerBadgePosition() {
+  if (!parseBannerPositionKey(state.activeBannerPositionKey)) return;
+  delete state.bannerBadgeOverrides[state.activeBannerPositionKey];
+}
+
 function setActiveBannerPosition(setIndex, size) {
   const key = makeBannerPositionKey(setIndex, size);
   if (state.activeBannerPositionKey === key) return;
   state.activeBannerPositionKey = key;
   renderShiftControls();
+  renderTextSetsEditor();
+  renderBannerSetsView();
+}
+
+function clearActiveBannerPosition() {
+  if (!state.activeBannerPositionKey) return;
+  state.activeBannerPositionKey = "";
+  renderShiftControls();
+  renderTextSetsEditor();
   renderBannerSetsView();
 }
 
@@ -2266,6 +2330,17 @@ function reindexBannerImageOverridesAfterRemove(removedSetIndex) {
   }
 }
 
+function reindexBannerBadgeOverridesAfterRemove(removedSetIndex) {
+  const nextOverrides = {};
+  Object.entries(state.bannerBadgeOverrides || {}).forEach(([key, value]) => {
+    const parsed = parseBannerPositionKey(key);
+    if (!parsed || parsed.setIndex === removedSetIndex) return;
+    const nextSetIndex = parsed.setIndex > removedSetIndex ? parsed.setIndex - 1 : parsed.setIndex;
+    nextOverrides[makeBannerPositionKey(nextSetIndex, parsed.size)] = value;
+  });
+  state.bannerBadgeOverrides = nextOverrides;
+}
+
 function copyBannerImageOverridesToSet(fromSetIndex, toSetIndex) {
   Object.entries(state.bannerImageOverrides || {}).forEach(([key, value]) => {
     const parsed = parseBannerPositionKey(key);
@@ -2274,11 +2349,45 @@ function copyBannerImageOverridesToSet(fromSetIndex, toSetIndex) {
   });
 }
 
+function copyBannerBadgeOverridesToSet(fromSetIndex, toSetIndex) {
+  Object.entries(state.bannerBadgeOverrides || {}).forEach(([key, value]) => {
+    const parsed = parseBannerPositionKey(key);
+    if (!parsed || parsed.setIndex !== fromSetIndex) return;
+    state.bannerBadgeOverrides[makeBannerPositionKey(toSetIndex, parsed.size)] = { ...normalizeBadgePositionValues(value, fromSetIndex) };
+  });
+}
+
 function markImagePositionChanged() {
   renderShiftControls();
   invalidateRenderedBanners();
   renderBannerSetsView();
   renderTopAction();
+}
+
+function markBadgePositionChanged() {
+  renderShiftControls();
+  invalidateRenderedBanners();
+  renderBannerSetsView();
+  renderTopAction();
+}
+
+function updateBadgePositionForSet(setIndex, partialValues) {
+  const active = parseBannerPositionKey(state.activeBannerPositionKey);
+  if (active && active.setIndex === setIndex) {
+    updateActiveBadgePosition(partialValues);
+    return;
+  }
+  const targetSet = state.bannerTextSets[setIndex];
+  if (!targetSet) return;
+  if (Object.prototype.hasOwnProperty.call(partialValues, "badgeScalePercent")) {
+    targetSet.badgeScalePercent = normalizeBadgeScalePercent(partialValues.badgeScalePercent);
+  }
+  if (Object.prototype.hasOwnProperty.call(partialValues, "badgeShiftX")) {
+    targetSet.badgeShiftX = clampBadgeShiftPercent(partialValues.badgeShiftX);
+  }
+  if (Object.prototype.hasOwnProperty.call(partialValues, "badgeShiftY")) {
+    targetSet.badgeShiftY = clampBadgeShiftPercent(partialValues.badgeShiftY);
+  }
 }
 
 function getImageShiftStepCount() {
@@ -2296,6 +2405,23 @@ function getImageScaleMax() {
 function clampShiftStep(stepValue) {
   const shiftStepCount = getImageShiftStepCount();
   return Math.max(-shiftStepCount, Math.min(shiftStepCount, stepValue));
+}
+
+function clampBadgeShiftPercent(value) {
+  return Math.max(BADGE_SHIFT_MIN, Math.min(BADGE_SHIFT_MAX, Number(value) || 0));
+}
+
+function clampBadgeScalePercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 100;
+  return Math.max(BADGE_SCALE_MIN, Math.min(BADGE_SCALE_MAX, numeric));
+}
+
+function normalizeBadgeScalePercent(value, fallback = 100) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return clampBadgeScalePercent(fallback);
+  const percent = numeric > 0 && numeric <= 3 ? numeric * 100 : numeric;
+  return clampBadgeScalePercent(percent);
 }
 
 function stepToShiftPx(stepValue) {
@@ -2354,6 +2480,7 @@ function renderTextSetsEditor() {
       removeBtn.addEventListener("click", () => {
         state.bannerTextSets.splice(index, 1);
         reindexBannerImageOverridesAfterRemove(index);
+        reindexBannerBadgeOverridesAfterRemove(index);
         invalidateRenderedBanners();
         renderTextSetsEditor();
         renderShiftControls();
@@ -2441,6 +2568,7 @@ function renderTextSetsEditor() {
       state.bannerTextSets[index].badgeEnabled = !Boolean(state.bannerTextSets[index].badgeEnabled);
       invalidateRenderedBanners();
       renderTextSetsEditor();
+      renderShiftControls();
       renderBannerSetsView();
       renderTopAction();
     });
@@ -2478,27 +2606,80 @@ function renderTextSetsEditor() {
       });
       card.appendChild(badgeFieldsRow);
 
+      const activeBadgeTarget = parseBannerPositionKey(state.activeBannerPositionKey);
+      const isEditingSpecificBadge = Boolean(activeBadgeTarget && activeBadgeTarget.setIndex === index);
+      const badgePositionValues = isEditingSpecificBadge
+        ? getActiveBadgePositionValues()
+        : getTextSetBadgePositionValues(index);
+      const badgeScopeRow = document.createElement("div");
+      badgeScopeRow.className = "shift-scope-row badge-edit-scope-row";
+      const badgeScopeLabel = document.createElement("span");
+      badgeScopeLabel.className = "shift-scope-label badge-scope-label";
+      if (isEditingSpecificBadge) {
+        badgeScopeLabel.classList.add("is-banner-specific");
+        badgeScopeLabel.textContent = `Editing banner · ${activeBadgeTarget.size}`;
+      } else {
+        badgeScopeLabel.textContent = "Default for this set";
+      }
+      badgeScopeRow.appendChild(badgeScopeLabel);
+      let resetBadgeBtn = null;
+      if (isEditingSpecificBadge) {
+        resetBadgeBtn = document.createElement("button");
+        resetBadgeBtn.type = "button";
+        resetBadgeBtn.className = "shift-reset-btn";
+        resetBadgeBtn.textContent = "Reset badge";
+        resetBadgeBtn.disabled = !state.bannerBadgeOverrides[state.activeBannerPositionKey];
+        resetBadgeBtn.addEventListener("click", () => {
+          resetActiveBannerBadgePosition();
+          renderTextSetsEditor();
+          markBadgePositionChanged();
+        });
+        badgeScopeRow.appendChild(resetBadgeBtn);
+      }
+      card.appendChild(badgeScopeRow);
+
       const shiftWrap = document.createElement("div");
       shiftWrap.className = "badge-shift-wrap";
+      const sizeBlock = document.createElement("div");
+      sizeBlock.className = "shift-block";
+      const sizeLabel = document.createElement("label");
+      sizeLabel.className = "shift-label";
+      sizeLabel.textContent = "Badge size";
+      const sizeInput = document.createElement("input");
+      sizeInput.type = "range";
+      sizeInput.className = "shift-slider";
+      sizeInput.min = String(BADGE_SCALE_MIN);
+      sizeInput.max = String(BADGE_SCALE_MAX);
+      sizeInput.step = String(BADGE_SCALE_STEP);
+      sizeInput.value = String(badgePositionValues.badgeScalePercent);
+      applySliderFill(sizeInput);
+      sizeInput.addEventListener("input", (event) => {
+        updateBadgePositionForSet(index, { badgeScalePercent: normalizeBadgeScalePercent(event.target.value) });
+        applySliderFill(sizeInput);
+        if (resetBadgeBtn) resetBadgeBtn.disabled = false;
+        markBadgePositionChanged();
+      });
+      sizeBlock.appendChild(sizeLabel);
+      sizeBlock.appendChild(sizeInput);
+
       const shiftXBlock = document.createElement("div");
       shiftXBlock.className = "shift-block";
       const shiftXLabel = document.createElement("label");
       shiftXLabel.className = "shift-label";
-      shiftXLabel.textContent = "Badge X (%)";
+      shiftXLabel.textContent = "Badge X (left-right)";
       const shiftXInput = document.createElement("input");
       shiftXInput.type = "range";
       shiftXInput.className = "shift-slider";
       shiftXInput.min = "0";
       shiftXInput.max = "100";
       shiftXInput.step = "10";
-      shiftXInput.value = String(Math.max(0, Math.min(100, Number(set.badgeShiftX) || 0)));
+      shiftXInput.value = String(badgePositionValues.badgeShiftX);
       applySliderFill(shiftXInput);
       shiftXInput.addEventListener("input", (event) => {
-        state.bannerTextSets[index].badgeShiftX = Math.max(0, Math.min(100, Number(event.target.value) || 0));
+        updateBadgePositionForSet(index, { badgeShiftX: clampBadgeShiftPercent(Number(event.target.value) || 0) });
         applySliderFill(shiftXInput);
-        invalidateRenderedBanners();
-        renderBannerSetsView();
-        renderTopAction();
+        if (resetBadgeBtn) resetBadgeBtn.disabled = false;
+        markBadgePositionChanged();
       });
       shiftXBlock.appendChild(shiftXLabel);
       shiftXBlock.appendChild(shiftXInput);
@@ -2507,25 +2688,25 @@ function renderTextSetsEditor() {
       shiftYBlock.className = "shift-block";
       const shiftYLabel = document.createElement("label");
       shiftYLabel.className = "shift-label";
-      shiftYLabel.textContent = "Badge Y (%)";
+      shiftYLabel.textContent = "Badge Y (down-up)";
       const shiftYInput = document.createElement("input");
       shiftYInput.type = "range";
       shiftYInput.className = "shift-slider";
       shiftYInput.min = "0";
       shiftYInput.max = "100";
       shiftYInput.step = "10";
-      shiftYInput.value = String(Math.max(0, Math.min(100, Number(set.badgeShiftY) || 0)));
+      shiftYInput.value = String(badgePositionValues.badgeShiftY);
       applySliderFill(shiftYInput);
       shiftYInput.addEventListener("input", (event) => {
-        state.bannerTextSets[index].badgeShiftY = Math.max(0, Math.min(100, Number(event.target.value) || 0));
+        updateBadgePositionForSet(index, { badgeShiftY: clampBadgeShiftPercent(Number(event.target.value) || 0) });
         applySliderFill(shiftYInput);
-        invalidateRenderedBanners();
-        renderBannerSetsView();
-        renderTopAction();
+        if (resetBadgeBtn) resetBadgeBtn.disabled = false;
+        markBadgePositionChanged();
       });
       shiftYBlock.appendChild(shiftYLabel);
       shiftYBlock.appendChild(shiftYInput);
 
+      shiftWrap.appendChild(sizeBlock);
       shiftWrap.appendChild(shiftXBlock);
       shiftWrap.appendChild(shiftYBlock);
       card.appendChild(shiftWrap);
@@ -2583,7 +2764,7 @@ function makeSlot(size, url, isLoading, setIndex = 0) {
   const key = makeBannerPositionKey(setIndex, size);
   slot.className = `banner-slot ${BANNER_SIZES.find((s) => s.value === size)?.slotClass || ""}`;
   if (state.activeBannerPositionKey === key) slot.classList.add("is-active");
-  if (state.bannerImageOverrides[key]) slot.classList.add("has-position-override");
+  if (state.bannerImageOverrides[key] || state.bannerBadgeOverrides[key]) slot.classList.add("has-position-override");
   slot.setAttribute("tabindex", "0");
   slot.setAttribute("role", "button");
   slot.setAttribute("aria-label", `Edit image position for set ${setIndex + 1}, ${size}`);
@@ -2932,6 +3113,20 @@ function buildRenderPayload() {
       };
     })
     .filter(Boolean);
+  const bannerBadgeOverrides = Object.entries(state.bannerBadgeOverrides || {})
+    .map(([key, values]) => {
+      const parsed = parseBannerPositionKey(key);
+      if (!parsed) return null;
+      const normalized = normalizeBadgePositionValues(values, parsed.setIndex);
+      return {
+        textSetIndex: parsed.setIndex,
+        size: parsed.size,
+        badgeShiftX: normalized.badgeShiftX,
+        badgeShiftY: normalized.badgeShiftY,
+        badgeScale: normalized.badgeScalePercent / 100,
+      };
+    })
+    .filter(Boolean);
   return {
     imageUrl: state.bannerSourceImageUrl,
     bannerSourceUrl: selectedLibraryImage?.banner_source_url || "",
@@ -2950,14 +3145,16 @@ function buildRenderPayload() {
       badgeTopText: String(set.badgeTopText || "").trim(),
       badgeBottomText: String(set.badgeBottomText || "").trim(),
       accentColor: resolveAccentColor(),
-      badgeShiftX: Math.max(0, Math.min(100, Number(set.badgeShiftX) || 0)),
-      badgeShiftY: Math.max(0, Math.min(100, Number(set.badgeShiftY) || 0)),
+      badgeShiftX: clampBadgeShiftPercent(Number(set.badgeShiftX) || 0),
+      badgeShiftY: clampBadgeShiftPercent(Number(set.badgeShiftY) || 0),
+      badgeScale: normalizeBadgeScalePercent(set.badgeScalePercent ?? set.badgeScale ?? 100) / 100,
     })),
     layoutType: state.bannerLayout,
     brand: state.bannerBrand,
     logoVariant: normalizeBannerLogoVariantForBrand(state.bannerBrand, state.bannerLogoVariant),
     sizes: getActiveBannerSizes(),
     bannerImageOverrides,
+    bannerBadgeOverrides,
   };
 }
 
@@ -3573,9 +3770,15 @@ if (resetBannerShiftBtnEl) {
 
 if (useGlobalShiftBtnEl) {
   useGlobalShiftBtnEl.addEventListener("click", () => {
-    state.activeBannerPositionKey = "";
-    renderShiftControls();
-    renderBannerSetsView();
+    clearActiveBannerPosition();
+  });
+}
+
+if (bannerSetsViewEl) {
+  bannerSetsViewEl.addEventListener("click", (event) => {
+    const interactiveTarget = event.target.closest(".banner-slot, .banner-download-btn");
+    if (interactiveTarget) return;
+    clearActiveBannerPosition();
   });
 }
 
@@ -3708,6 +3911,7 @@ addTextSetBtn.addEventListener("click", () => {
           language: "general",
           badgeShiftX: 0,
           badgeShiftY: 0,
+          badgeScalePercent: 100,
         };
 
   const nextSetIndex = state.bannerTextSets.length;
@@ -3720,11 +3924,13 @@ addTextSetBtn.addEventListener("click", () => {
     badgeEnabled: Boolean(sourceSet.badgeEnabled),
     badgeTopText: String(sourceSet.badgeTopText || "From"),
     badgeBottomText: String(sourceSet.badgeBottomText || "65 AED"),
-    badgeShiftX: Math.max(0, Math.min(100, Number(sourceSet.badgeShiftX) || 0)),
-    badgeShiftY: Math.max(0, Math.min(100, Number(sourceSet.badgeShiftY) || 0)),
+    badgeShiftX: clampBadgeShiftPercent(Number(sourceSet.badgeShiftX) || 0),
+    badgeShiftY: clampBadgeShiftPercent(Number(sourceSet.badgeShiftY) || 0),
+    badgeScalePercent: normalizeBadgeScalePercent(sourceSet.badgeScalePercent ?? sourceSet.badgeScale ?? 100),
   });
   if (sourceIndex >= 0) {
     copyBannerImageOverridesToSet(sourceIndex, nextSetIndex);
+    copyBannerBadgeOverridesToSet(sourceIndex, nextSetIndex);
   }
   invalidateRenderedBanners();
   renderTextSetsEditor();

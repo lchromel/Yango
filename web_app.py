@@ -3031,6 +3031,7 @@ def _draw_price_badge(
     text_align: str,
     headline_font_path: Path,
     font_scale: float = 1.0,
+    badge_scale: float = 1.0,
     badge_fill_hex: str = "#E3FF74",
     shift_right_px: int = 0,
     shift_up_px: int = 0,
@@ -3043,9 +3044,15 @@ def _draw_price_badge(
     top_value = str(top_text or "").strip()
     bottom_value = str(bottom_text or "").strip()
 
-    size_scale = 1.0
+    try:
+        resolved_badge_scale = float(badge_scale or 1.0)
+    except (TypeError, ValueError):
+        resolved_badge_scale = 1.0
+    resolved_badge_scale = max(0.7, min(1.5, resolved_badge_scale))
+
+    size_scale = resolved_badge_scale
     if text_align == "center" and size_key in {"1200x1200", "1200x1350", "1200x1500", "1080x1920"}:
-        size_scale = 0.8
+        size_scale *= 0.8
 
     base_badge_w = max(1, int(round(spec["w"] * size_scale)))
     base_badge_h = max(1, int(round(spec["h"] * size_scale)))
@@ -4051,6 +4058,7 @@ def _render_figma_brand_banner_by_size(
     accent_color: str = "#E3FF74",
     badge_shift_x: int = 0,
     badge_shift_y: int = 0,
+    badge_scale: float = 1.0,
     image_scale: float = 1.0,
     image_shift_x: int = 0,
     image_shift_y: int = 0,
@@ -4105,6 +4113,7 @@ def _render_figma_brand_banner_by_size(
             text_align=align_mode,
             headline_font_path=headline_font_path,
             font_scale=font_scale,
+            badge_scale=badge_scale,
             badge_fill_hex=highlight_hex,
             shift_right_px=max(0, int(badge_shift_x or 0)),
             shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -4424,6 +4433,7 @@ def _render_figma_brand_banner_by_size(
                 text_align=align_mode,
                 headline_font_path=headline_font_path,
                 font_scale=font_scale,
+                badge_scale=badge_scale,
                 badge_fill_hex=highlight_hex,
                 shift_right_px=max(0, int(badge_shift_x or 0)),
                 shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -4526,6 +4536,7 @@ def _render_master_banner_by_size(
     accent_color: str = "#E3FF74",
     badge_shift_x: int = 0,
     badge_shift_y: int = 0,
+    badge_scale: float = 1.0,
     image_scale: float = 1.0,
     image_shift_x: int = 0,
     image_shift_y: int = 0,
@@ -4547,6 +4558,7 @@ def _render_master_banner_by_size(
             accent_color=accent_color,
             badge_shift_x=badge_shift_x,
             badge_shift_y=badge_shift_y,
+            badge_scale=badge_scale,
             image_scale=image_scale,
             image_shift_x=image_shift_x,
             image_shift_y=image_shift_y,
@@ -4676,6 +4688,7 @@ def _render_master_banner_by_size(
                 text_align=align_mode,
                 headline_font_path=headline_font_path,
                 font_scale=banner_font_scale,
+                badge_scale=badge_scale,
                 badge_fill_hex=accent_hex,
                 shift_right_px=max(0, int(badge_shift_x or 0)),
                 shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -4847,6 +4860,7 @@ def _render_master_banner_by_size(
                 text_align=align_mode,
                 headline_font_path=headline_font_path,
                 font_scale=banner_font_scale,
+                badge_scale=badge_scale,
                 badge_fill_hex=accent_hex,
                 shift_right_px=max(0, int(badge_shift_x or 0)),
                 shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -4962,6 +4976,7 @@ def _render_master_banner_by_size(
                 text_align=align_mode,
                 headline_font_path=headline_font_path,
                 font_scale=banner_font_scale,
+                badge_scale=badge_scale,
                 badge_fill_hex=accent_hex,
                 shift_right_px=max(0, int(badge_shift_x or 0)),
                 shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -5141,6 +5156,7 @@ def _render_master_banner_by_size(
                     text_align=align_mode,
                     headline_font_path=headline_font_path,
                     font_scale=banner_font_scale,
+                    badge_scale=badge_scale,
                     badge_fill_hex=accent_hex,
                     shift_right_px=max(0, int(badge_shift_x or 0)),
                     shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -5243,6 +5259,7 @@ def _render_master_banner_by_size(
                     text_align=align_mode,
                     headline_font_path=headline_font_path,
                     font_scale=banner_font_scale,
+                    badge_scale=badge_scale,
                     badge_fill_hex=accent_hex,
                     shift_right_px=max(0, int(badge_shift_x or 0)),
                     shift_up_px=max(0, int(badge_shift_y or 0)),
@@ -5406,6 +5423,13 @@ def render_banner_images(
             badge_shift_y = 0
         badge_shift_x = max(0, badge_shift_x)
         badge_shift_y = max(0, badge_shift_y)
+        try:
+            badge_scale = float((text_set or {}).get("badgeScale", (text_set or {}).get("badgeScalePercent", 1.0)) or 1.0)
+        except (TypeError, ValueError):
+            badge_scale = 1.0
+        if badge_scale > 10:
+            badge_scale = badge_scale / 100.0
+        badge_scale = max(0.7, min(1.5, badge_scale))
 
         for size_label in sizes:
             size_key = str(size_label).strip()
@@ -5417,6 +5441,9 @@ def render_banner_images(
             render_image_scale = float(override.get("image_scale", image_scale))
             render_image_shift_x = int(override.get("image_shift_x", image_shift_x))
             render_image_shift_y = int(override.get("image_shift_y", image_shift_y))
+            render_badge_shift_x = int(override.get("badge_shift_x", badge_shift_x))
+            render_badge_shift_y = int(override.get("badge_shift_y", badge_shift_y))
+            render_badge_scale = float(override.get("badge_scale", badge_scale))
 
             if normalized_layout not in {"photo", "black", "white"} and not _is_frame_layout_variant(normalized_layout):
                 normalized_layout = "photo"
@@ -5432,8 +5459,9 @@ def render_banner_images(
                 badge_top_text=badge_top_text,
                 badge_bottom_text=badge_bottom_text,
                 accent_color=accent_color,
-                badge_shift_x=badge_shift_x,
-                badge_shift_y=badge_shift_y,
+                badge_shift_x=render_badge_shift_x,
+                badge_shift_y=render_badge_shift_y,
+                badge_scale=render_badge_scale,
                 image_scale=render_image_scale,
                 image_shift_x=render_image_shift_x,
                 image_shift_y=render_image_shift_y,
@@ -5999,6 +6027,44 @@ class Handler(SimpleHTTPRequestHandler):
                         "image_shift_x": override_shift_x,
                         "image_shift_y": override_shift_y,
                     }
+            raw_badge_overrides = body.get("bannerBadgeOverrides", [])
+            if isinstance(raw_badge_overrides, list):
+                for raw_override in raw_badge_overrides:
+                    if not isinstance(raw_override, dict):
+                        continue
+                    try:
+                        override_set_index = int(raw_override.get("textSetIndex", raw_override.get("setIndex", 0)) or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    override_size = str(raw_override.get("size", "")).strip()
+                    if override_set_index < 0 or override_size not in BANNER_SIZE_MAP:
+                        continue
+                    try:
+                        override_badge_shift_x = int(raw_override.get("badgeShiftX", 0) or 0)
+                    except (TypeError, ValueError):
+                        override_badge_shift_x = 0
+                    try:
+                        override_badge_shift_y = int(raw_override.get("badgeShiftY", 0) or 0)
+                    except (TypeError, ValueError):
+                        override_badge_shift_y = 0
+                    try:
+                        override_badge_scale = float(raw_override.get("badgeScale", raw_override.get("badgeScalePercent", 1.0)) or 1.0)
+                    except (TypeError, ValueError):
+                        override_badge_scale = 1.0
+                    if override_badge_scale > 10:
+                        override_badge_scale = override_badge_scale / 100.0
+                    override_badge_scale = max(0.7, min(1.5, override_badge_scale))
+                    override_bucket = banner_image_overrides.setdefault(
+                        (override_set_index, override_size),
+                        {
+                            "image_scale": image_scale,
+                            "image_shift_x": image_shift_x,
+                            "image_shift_y": image_shift_y,
+                        },
+                    )
+                    override_bucket["badge_shift_x"] = max(0, min(100, override_badge_shift_x))
+                    override_bucket["badge_shift_y"] = max(0, min(100, override_badge_shift_y))
+                    override_bucket["badge_scale"] = override_badge_scale
             sizes = body.get("sizes", [])
             if not isinstance(sizes, list):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "sizes must be an array"})

@@ -657,6 +657,19 @@ body {
   margin-top: 0;
 }
 
+.badge-edit-scope-row {
+  margin-top: 10px;
+  min-height: 24px;
+}
+
+.badge-scope-label {
+  color: rgba(14, 14, 14, 0.6);
+}
+
+.badge-scope-label.is-banner-specific {
+  color: #0e0e0e;
+}
+
 .badge-shift-wrap {
   margin-top: 8px;
   display: flex;
