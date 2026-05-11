@@ -506,6 +506,7 @@ function normalizeLibraryImage(item) {
   return {
     id: String(item.id || imageUrl),
     image_url: imageUrl,
+    thumbnail_url: String(item.thumbnail_url || "").trim(),
     banner_source_url: String(item.banner_source_url || "").trim(),
     effective_banner_source_url: String(item.effective_banner_source_url || imageUrl).trim() || imageUrl,
     banner_ready: Boolean(item.banner_ready),
@@ -593,18 +594,23 @@ function normalizeServiceKey(value) {
 function getLibraryImageService(item) {
   const explicit = normalizeServiceKey(item?.service);
   if (explicit) return explicit;
-  if (String(item?.kind || "").toLowerCase() === "uploaded") return "uploaded";
+  const imageUrl = String(item?.image_url || "").toLowerCase();
+  if (imageUrl.includes("/uploaded-drive/")) return "yango-drive";
   const prompt = String(item?.prompt || "").toLowerCase();
   if (prompt.includes("yango drive")) return "yango-drive";
   return "ride-hailing";
 }
 
+function getActiveImageLibraryServiceFilter() {
+  if (state.activeTab === "banners") return state.bannerBrand;
+  if (state.activeTab === "video") return state.videoBrand;
+  return state.selectedService;
+}
+
 function getServiceFilteredImageLibrary() {
-  const selected = state.activeTab === "video" ? "yango-drive" : state.selectedService;
+  const selected = getActiveImageLibraryServiceFilter();
   return state.imageLibrary.filter((item) => {
-    const service = getLibraryImageService(item);
-    if (service === "uploaded") return true;
-    return service === selected;
+    return getLibraryImageService(item) === selected;
   });
 }
 
@@ -733,6 +739,14 @@ function applySelectedImage(record, options = {}) {
   setSourceStatusForImage(image);
   renderBannerSetsView();
   renderUiState();
+}
+
+function clearBannerSourceIfBrandMismatch() {
+  const selected = findLibraryImageByUrl(state.bannerSourceImageUrl);
+  if (!selected || getLibraryImageService(selected) === state.bannerBrand) return;
+  state.bannerSourceImageUrl = "";
+  setSourceStatus("none");
+  invalidateRenderedBanners();
 }
 
 function applySelectedVideoImage(record, options = {}) {
@@ -934,7 +948,7 @@ function renderSourceLibrary() {
 
     const preview = document.createElement("img");
     preview.className = "source-card-image";
-    preview.src = item.image_url;
+    preview.src = item.thumbnail_url || item.image_url;
     preview.alt = item.car_model || item.original_name || item.label || item.kind || "Saved image";
     previewBtn.appendChild(preview);
     previewBtn.addEventListener("click", () => applySelectedImage(item));
@@ -999,7 +1013,7 @@ function renderVideoImageLibrary() {
 
     const preview = document.createElement("img");
     preview.className = "source-card-image";
-    preview.src = item.image_url;
+    preview.src = item.thumbnail_url || item.image_url;
     preview.alt = item.car_model || item.original_name || item.label || item.kind || "Saved image";
     previewBtn.appendChild(preview);
     previewBtn.addEventListener("click", () => applySelectedVideoImage(item));
@@ -1316,12 +1330,6 @@ function renderServiceControl() {
         state.driveCountryMenuOpen = false;
         state.driveCityMenuOpen = false;
         state.carMenuOpen = false;
-        if (service.value === "yango-drive") {
-          state.bannerBrand = "yango-drive";
-          state.videoBrand = "yango-drive";
-        } else {
-          state.bannerBrand = "yango";
-        }
         renderImageControls();
         renderUiState();
       }
@@ -1900,8 +1908,13 @@ function renderBrandSelector(rowEl, selectedBrand, onSelect, options = {}) {
 function renderBannerBrandSelector() {
   renderBrandSelector(bannerBrandRowEl, state.bannerBrand, (value) => {
     state.bannerBrand = value;
+    state.sourceLibraryCountry = "";
+    state.sourceLibraryCountryMenuOpen = false;
+    clearBannerSourceIfBrandMismatch();
     invalidateRenderedBanners();
     renderBannerBrandSelector();
+    renderSelectedSource();
+    renderSourceLibrary();
     renderBannerSetsView();
     renderTopAction();
   });
@@ -1914,6 +1927,7 @@ function renderVideoBrandSelector() {
     (value) => {
       state.videoBrand = value;
       state.videoPromptText = "";
+      state.videoImageLibraryOpen = false;
       state.videoRenderStatus = "No video yet.";
       renderVideoBrandSelector();
       renderUiState();
@@ -2599,12 +2613,6 @@ async function generatePrompt() {
 
     state.imageUrl = payload.image_local_url || payload.image_url || "";
     state.bannerSourceImageUrl = state.imageUrl;
-    if (isYangoDriveService) {
-      state.bannerBrand = "yango-drive";
-      state.videoBrand = "yango-drive";
-    } else {
-      state.bannerBrand = "yango";
-    }
     state.basePromptText = payload.prompt || "";
     state.editPromptText = "";
     upsertStateLibraryImage(payload.library_image);

@@ -60,6 +60,8 @@ IMAGE_LIBRARY_FILE = PERSISTENT_OUTPUT_ROOT / "image_library.json"
 IMAGE_LIBRARY_LOCK = threading.Lock()
 VIDEO_LIBRARY_FILE = EPHEMERAL_OUTPUT_ROOT / "video_library.json"
 VIDEO_LIBRARY_LOCK = threading.Lock()
+THUMBNAIL_MAX_SIDE = 360
+THUMBNAIL_QUALITY = 82
 BRAND_LOGO_TEXT = "YANGO"
 BRAND_LOGO_TEXT_BY_KEY = {
     "yango": "YANGO",
@@ -511,9 +513,11 @@ def _normalize_image_country_bucket(country: str, *, fallback: str = "other") ->
 def _public_image_library_record(record: dict) -> dict:
     image_url = str(record.get("image_url", "")).strip()
     banner_source_url = str(record.get("banner_source_url", "")).strip()
+    thumbnail_url = str(record.get("thumbnail_url", "")).strip()
     return {
         "id": str(record.get("id", "")).strip(),
         "image_url": image_url,
+        "thumbnail_url": thumbnail_url,
         "banner_source_url": banner_source_url,
         "effective_banner_source_url": banner_source_url or image_url,
         "banner_ready": bool(banner_source_url),
@@ -534,6 +538,18 @@ def _public_image_library_record(record: dict) -> dict:
 def list_image_library() -> list[dict]:
     with IMAGE_LIBRARY_LOCK:
         records = _load_image_library_records_unlocked()
+        changed = False
+        for item in records:
+            thumbnail_url = _ensure_image_thumbnail_url(
+                str(item.get("image_url", "")).strip(),
+                country=str(item.get("country", "")).strip(),
+                existing_url=str(item.get("thumbnail_url", "")).strip(),
+            )
+            if thumbnail_url and thumbnail_url != str(item.get("thumbnail_url", "")).strip():
+                item["thumbnail_url"] = thumbnail_url
+                changed = True
+        if changed:
+            _save_image_library_records_unlocked(records)
         return [_public_image_library_record(item) for item in records]
 
 
@@ -584,6 +600,11 @@ def _upsert_image_library_record(
         record["original_name"] = str(original_name or record.get("original_name") or "").strip()
         record["edit_prompt"] = str(edit_prompt or record.get("edit_prompt") or "").strip()
         record["source_image_url"] = str(source_image_url or record.get("source_image_url") or "").strip()
+        record["thumbnail_url"] = _ensure_image_thumbnail_url(
+            normalized_image_url,
+            country=record["country"],
+            existing_url=str(record.get("thumbnail_url", "")).strip(),
+        )
         if label:
             record["label"] = str(label).strip()
         elif not str(record.get("label", "")).strip():
@@ -1918,6 +1939,53 @@ def _persist_image_for_library(image_url: str, *, country: str = "") -> str:
         image = Image.open(BytesIO(raw)).convert("RGB")
         image.save(file_path, format="PNG", optimize=True)
     return f"/output/generated/{bucket}/{safe_name}"
+
+
+def _is_existing_public_file_url(url: str) -> bool:
+    value = str(url or "").strip()
+    if not value:
+        return False
+    try:
+        local_path = _resolve_public_file_path(value)
+    except Exception:
+        return False
+    return local_path.exists() and local_path.is_file()
+
+
+def _create_image_thumbnail_url(image_url: str, *, country: str = "") -> str:
+    normalized_url = str(image_url or "").strip()
+    if not normalized_url:
+        return ""
+
+    raw = _read_image_bytes_from_url(normalized_url)
+    source_hash = hashlib.sha256(raw).hexdigest()[:20]
+    bucket = _normalize_image_country_bucket(country, fallback="other")
+    file_name = f"thumb_{source_hash}_{THUMBNAIL_MAX_SIDE}.jpg"
+    target_dir = PERSISTENT_GENERATED_DIR / "_thumbs" / bucket
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_path = target_dir / file_name
+    if not file_path.exists():
+        with Image.open(BytesIO(raw)) as source_image:
+            thumbnail = source_image.convert("RGB")
+            thumbnail.thumbnail((THUMBNAIL_MAX_SIDE, THUMBNAIL_MAX_SIDE), Image.Resampling.LANCZOS)
+            thumbnail.save(
+                file_path,
+                format="JPEG",
+                quality=THUMBNAIL_QUALITY,
+                optimize=True,
+                progressive=True,
+            )
+    return f"/output/generated/_thumbs/{bucket}/{file_name}"
+
+
+def _ensure_image_thumbnail_url(image_url: str, *, country: str = "", existing_url: str = "") -> str:
+    normalized_existing_url = str(existing_url or "").strip()
+    if _is_existing_public_file_url(normalized_existing_url):
+        return normalized_existing_url
+    try:
+        return _create_image_thumbnail_url(image_url, country=country)
+    except Exception:
+        return normalized_existing_url
 
 
 def _gemini_generate_image_bytes(
