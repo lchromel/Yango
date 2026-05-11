@@ -448,6 +448,8 @@ const sourceLibraryToggleEl = document.getElementById("sourceLibraryToggle");
 const sourceLibraryChevronEl = document.getElementById("sourceLibraryChevron");
 const layoutTypeRowEl = document.getElementById("layoutTypeRow");
 const bannerBrandRowEl = document.getElementById("bannerBrandRow");
+const bannerMarkSectionEl = document.getElementById("bannerMarkSection");
+const bannerMarkRowEl = document.getElementById("bannerMarkRow");
 const bannerLogoSectionEl = document.getElementById("bannerLogoSection");
 const bannerLogoRowEl = document.getElementById("bannerLogoRow");
 const videoBrandRowEl = document.getElementById("videoBrandRow");
@@ -1736,6 +1738,7 @@ function renderUiState() {
   renderVideoImageLibrary();
   renderVideoLibrary();
   renderBannerBrandSelector();
+  renderBannerMarkSelector();
   renderBannerLogoSelector();
   renderVideoBrandSelector();
 }
@@ -1864,28 +1867,6 @@ function renderLayoutTypes() {
     layoutGroup.appendChild(chip);
   });
 
-  const logoLayoutGroup = document.createElement("div");
-  logoLayoutGroup.className = "layout-logo-group";
-  if (supportsBannerIconLayout(state.bannerBrand)) {
-    const normalizedLogoLayout = state.bannerLogoVariant === "icon" ? "icon" : "default";
-    BANNER_LOGO_LAYOUT_OPTIONS.forEach((optionDef) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "angle-chip";
-      chip.textContent = optionDef.label;
-      if (normalizedLogoLayout === optionDef.value) chip.classList.add("is-active");
-      chip.addEventListener("click", () => {
-        state.bannerLogoVariant = optionDef.value;
-        invalidateRenderedBanners();
-        renderLayoutTypes();
-        renderBannerLogoSelector();
-        renderBannerSetsView();
-        renderTopAction();
-      });
-      logoLayoutGroup.appendChild(chip);
-    });
-  }
-
   const accentGroup = document.createElement("div");
   accentGroup.className = "layout-accent-group";
   ["lime", "red"].forEach((key) => {
@@ -1925,7 +1906,6 @@ function renderLayoutTypes() {
   });
 
   row.appendChild(layoutGroup);
-  if (logoLayoutGroup.childElementCount) row.appendChild(logoLayoutGroup);
   row.appendChild(accentGroup);
   layoutTypeRowEl.appendChild(row);
 }
@@ -1933,6 +1913,33 @@ function renderLayoutTypes() {
 function supportsBannerIconLayout(brand = state.bannerBrand) {
   const normalizedBrand = String(brand || "").trim().toLowerCase();
   return ["yango", "yango-pro", "yandex-go"].includes(normalizedBrand);
+}
+
+function renderBannerMarkSelector() {
+  if (bannerMarkSectionEl) {
+    bannerMarkSectionEl.classList.toggle("hidden", !supportsBannerIconLayout(state.bannerBrand));
+  }
+  if (!bannerMarkRowEl) return;
+  bannerMarkRowEl.innerHTML = "";
+  if (!supportsBannerIconLayout(state.bannerBrand)) return;
+
+  const normalizedLogoLayout = state.bannerLogoVariant === "icon" ? "icon" : "default";
+  BANNER_LOGO_LAYOUT_OPTIONS.forEach((optionDef) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "angle-chip";
+    chip.textContent = optionDef.label;
+    if (normalizedLogoLayout === optionDef.value) chip.classList.add("is-active");
+    chip.addEventListener("click", () => {
+      state.bannerLogoVariant = optionDef.value;
+      invalidateRenderedBanners();
+      renderBannerMarkSelector();
+      renderBannerLogoSelector();
+      renderBannerSetsView();
+      renderTopAction();
+    });
+    bannerMarkRowEl.appendChild(chip);
+  });
 }
 
 function renderBrandSelector(rowEl, selectedBrand, onSelect, options = {}) {
@@ -1993,6 +2000,7 @@ function renderBannerBrandSelector() {
     clearBannerSourceIfBrandMismatch();
     invalidateRenderedBanners();
     renderBannerBrandSelector();
+    renderBannerMarkSelector();
     renderBannerLogoSelector();
     renderSelectedSource();
     renderSourceLibrary();
@@ -3672,6 +3680,7 @@ promptInputEl.value = state.editPromptText;
 setSourceStatus("none");
 renderImageControls();
 renderLayoutTypes();
+renderBannerMarkSelector();
 renderShiftControls();
 renderTextSetsEditor();
 renderBannerSetsView();
