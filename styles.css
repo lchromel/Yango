@@ -134,6 +134,35 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
+#bannerMarkSection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 22px 22px;
+  column-gap: 8px;
+  row-gap: 4px;
+  align-items: start;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+#bannerMarkSection .field-label {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  align-self: start;
+}
+
+#bannerMarkRow,
+#bannerMarkRow .layout-accent-row {
+  display: contents;
+}
+
+#bannerMarkRow .layout-type-group {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: end;
+}
+
 .field-label {
   display: block;
   margin: 0 0 10px;
@@ -361,7 +390,7 @@ body {
 
 .layout-accent-row {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   width: 100%;
@@ -390,6 +419,15 @@ body {
   align-items: center;
 }
 
+.layout-accent-group.is-yandex-go {
+  display: grid;
+  grid-template-columns: repeat(4, 22px);
+  gap: 4px;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: stretch;
+}
+
 .accent-swatch-btn {
   width: 30px;
   height: 30px;
@@ -413,6 +451,19 @@ body {
   border-radius: 6px;
   border: 1px solid rgba(14, 14, 14, 0.1);
   display: block;
+}
+
+.layout-accent-group.is-yandex-go .accent-swatch-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.layout-accent-group.is-yandex-go .accent-swatch-core {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
 }
 
 .source-section {

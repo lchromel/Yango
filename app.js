@@ -199,6 +199,16 @@ const ACCENT_PRESET_VALUES = {
   lime: "#E3FF74",
   red: "#FF1A1A",
 };
+const YANDEX_GO_ACCENT_PRESETS = [
+  { key: "go-yellow", hex: "#FFEA00" },
+  { key: "go-black", hex: "#000000" },
+  { key: "go-green", hex: "#3FBD20" },
+  { key: "go-red", hex: "#FF4930" },
+  { key: "go-lavender", hex: "#8989FF" },
+  { key: "go-blue", hex: "#00ADFF" },
+  { key: "go-pink", hex: "#FD70CF" },
+];
+const YANDEX_GO_DEFAULT_ACCENT = YANDEX_GO_ACCENT_PRESETS[0].hex;
 
 const state = {
   vehicleData: [],
@@ -1938,6 +1948,33 @@ function usesYandexGoFramePalette(brand = state.bannerBrand, logoVariant = state
   return normalizedBrand === "yandex-go" || (normalizedBrand === "yango-drive" && normalizedLogo && normalizedLogo !== "default" && normalizedLogo !== "icon");
 }
 
+function usesYandexGoAccentPalette(brand = state.bannerBrand) {
+  return String(brand || "").trim().toLowerCase() === "yandex-go";
+}
+
+function getAccentPresetOptions(brand = state.bannerBrand) {
+  if (usesYandexGoAccentPalette(brand)) return YANDEX_GO_ACCENT_PRESETS;
+  return [
+    { key: "lime", hex: ACCENT_PRESET_VALUES.lime, customTrigger: false },
+    { key: "red", hex: ACCENT_PRESET_VALUES.red, customTrigger: true },
+  ];
+}
+
+function getAccentPresetValue(preset, brand = state.bannerBrand) {
+  const normalizedPreset = String(preset || "").toLowerCase();
+  const match = getAccentPresetOptions(brand).find((optionDef) => optionDef.key === normalizedPreset);
+  if (match) return match.hex;
+  return usesYandexGoAccentPalette(brand) ? YANDEX_GO_DEFAULT_ACCENT : ACCENT_PRESET_VALUES.lime;
+}
+
+function normalizeAccentPresetForBrand(brand = state.bannerBrand) {
+  if (state.bannerAccentPreset === "custom" && !usesYandexGoAccentPalette(brand)) return;
+  const options = getAccentPresetOptions(brand);
+  if (!options.some((optionDef) => optionDef.key === state.bannerAccentPreset)) {
+    state.bannerAccentPreset = options[0]?.key || "lime";
+  }
+}
+
 function isFrameLayout(layout = state.bannerLayout) {
   return String(layout || "").trim().toLowerCase().startsWith("frame");
 }
@@ -1992,27 +2029,30 @@ function renderBannerMarkSelector() {
     });
   }
 
+  normalizeAccentPresetForBrand();
   const accentGroup = document.createElement("div");
   accentGroup.className = "layout-accent-group";
-  ["lime", "red"].forEach((key) => {
+  if (usesYandexGoAccentPalette()) {
+    accentGroup.classList.add("is-yandex-go");
+  }
+  getAccentPresetOptions().forEach((optionDef) => {
+    const key = optionDef.key;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "accent-swatch-btn";
-    const isCustomTrigger = key === "red";
+    const isCustomTrigger = Boolean(optionDef.customTrigger);
     if (state.bannerAccentPreset === key || (isCustomTrigger && state.bannerAccentPreset === "custom")) {
       btn.classList.add("is-active");
     }
     const swatch = document.createElement("span");
     swatch.className = "accent-swatch-core";
-    swatch.style.background = key === "lime"
-      ? ACCENT_PRESET_VALUES.lime
-      : state.bannerAccentPreset === "custom"
+    swatch.style.background = isCustomTrigger && state.bannerAccentPreset === "custom"
         ? state.bannerAccentCustomColor
-        : ACCENT_PRESET_VALUES.red;
+        : optionDef.hex;
     btn.appendChild(swatch);
     btn.addEventListener("click", () => {
       if (isCustomTrigger) {
-        state.bannerAccentPreset = "red";
+        state.bannerAccentPreset = key;
         invalidateRenderedBanners();
         renderBannerMarkSelector();
         renderBannerSetsView();
@@ -2088,6 +2128,7 @@ function renderBannerBrandSelector() {
     state.bannerLogoVariant = value === "yango-drive"
       ? "default"
       : normalizeBannerLogoVariantForBrand(value, state.bannerLogoVariant);
+    normalizeAccentPresetForBrand(value);
     normalizeFrameLayoutForCurrentPalette();
     state.sourceLibraryCountry = "";
     state.sourceLibraryCountryMenuOpen = false;
@@ -2533,11 +2574,10 @@ function autoResizeTextarea(textarea) {
 
 function resolveAccentColor() {
   const preset = String(state.bannerAccentPreset || "lime").toLowerCase();
-  if (preset === "custom") {
+  if (preset === "custom" && !usesYandexGoAccentPalette()) {
     return state.bannerAccentCustomColor || ACCENT_PRESET_VALUES.lime;
   }
-  if (preset === "red") return ACCENT_PRESET_VALUES.red;
-  return ACCENT_PRESET_VALUES.lime;
+  return getAccentPresetValue(preset);
 }
 
 function refreshTextSetTextareaHeights() {

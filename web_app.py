@@ -82,6 +82,7 @@ BRAND_ICON_ASSET_BY_KEY = {
     "yango-pro": "YangoPro_icon_4x.png",
     "yandex-go": "YandexGo_icon_4x.png",
 }
+YANDEX_GO_DEFAULT_ACCENT = "#FFEA00"
 UNCROP_TARGET_WIDTH = 3200
 UNCROP_TARGET_HEIGHT = 2472
 UNCROP_MIN_HORIZONTAL_MARGIN = 262
@@ -3335,6 +3336,11 @@ def _get_highlight_fill(fill, highlight_hex: str = "#E3FF74"):
     return safe_hex
 
 
+def _resolve_banner_accent_color(raw_color: str, brand: str) -> str:
+    fallback = YANDEX_GO_DEFAULT_ACCENT if _normalize_brand_key(brand) == "yandex-go" else "#E3FF74"
+    return _normalize_hex_color(str(raw_color or "").strip(), fallback)
+
+
 def _resolve_italic_font_for_base(
     font: Union[ImageFont.FreeTypeFont, ImageFont.ImageFont],
 ) -> Optional[Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]]:
@@ -5412,7 +5418,7 @@ def render_banner_images(
         badge_enabled = bool((text_set or {}).get("badgeEnabled", False))
         badge_top_text = str((text_set or {}).get("badgeTopText", "")).strip()
         badge_bottom_text = str((text_set or {}).get("badgeBottomText", "")).strip()
-        accent_color = _normalize_hex_color(str((text_set or {}).get("accentColor", "#E3FF74")).strip(), "#E3FF74")
+        accent_color = _resolve_banner_accent_color((text_set or {}).get("accentColor", ""), brand)
         try:
             badge_shift_x = int((text_set or {}).get("badgeShiftX", 0) or 0)
         except (TypeError, ValueError):
