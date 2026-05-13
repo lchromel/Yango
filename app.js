@@ -3498,7 +3498,7 @@ async function generateVideoFromPrompt() {
   }
 
   state.videoRendering = true;
-  state.videoRenderStatus = "Submitting to Kling 3.0...";
+  state.videoRenderStatus = "Submitting to BytePlus Seedance 2.0...";
   state.videoResultUrl = "";
   renderUiState();
 

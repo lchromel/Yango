@@ -18,7 +18,7 @@ Yango Perf is a small Python + static frontend tool for generating performance m
 - 3D red-background object renders.
 - Image edits through Gemini / Nano Banana style models.
 - Banner rendering in several paid-social sizes.
-- Image-to-video generation through Kling, then local title/logo/packshot composition with ffmpeg.
+- Image-to-video generation through official BytePlus ModelArk Seedance API, then local title/logo/packshot composition with ffmpeg.
 - A separate Telegram bot that generates Nano Banana 2 car prompts.
 
 There is no frontend build step. `index.html`, `styles.css`, and `app.js` are served directly by `web_app.py`.
@@ -105,12 +105,17 @@ AI/image:
 
 Video:
 
-- `KLING_ACCESS_KEY`
-- `KLING_SECRET_KEY`
-- `KLING_DURATION`, default `5`.
-- `KLING_NEGATIVE_PROMPT`
-- `KLING_TIMEOUT_SECONDS`, default `240`.
-- `KLING_POLL_INTERVAL_SECONDS`, default `5`.
+- `ARK_API_KEY`, required for official BytePlus ModelArk Seedance API.
+- `BYTEPLUS_ARK_API_KEY`, `BYTEPLUS_API_KEY`, or `SEEDANCE_API_KEY`, accepted as fallback key names.
+- `BYTEPLUS_ARK_BASE_URL`, default `https://ark.ap-southeast.bytepluses.com/api/v3`.
+- `SEEDANCE_MODEL`, default `dreamina-seedance-2-0-260128`.
+- `SEEDANCE_DURATION`, default `10`; clamped to `4` through `15`.
+- `SEEDANCE_RESOLUTION`, default `720p`; supports `480p`, `720p`, or `1080p`.
+- `SEEDANCE_GENERATE_AUDIO`, default `true`.
+- `SEEDANCE_TIMEOUT_SECONDS`, default `600`.
+- `SEEDANCE_POLL_INTERVAL_SECONDS`, default `5`.
+- `KLING_ACCESS_KEY`, legacy unused fallback.
+- `KLING_SECRET_KEY`, legacy unused fallback.
 
 Telegram:
 
@@ -159,8 +164,8 @@ POST:
 - `/api/render-banners`: uncrops source image if needed, then renders banner PNGs.
 - `/api/create-banners-zip`: zips rendered banner URLs.
 - `/api/delete-library-image`: removes an image record from the library.
-- `/api/generate-video-prompt`: creates a Kling prompt from the selected/generated image.
-- `/api/generate-video`: submits image-to-video to Kling, saves raw video, composes titles/logo/packshot.
+- `/api/generate-video-prompt`: creates a Seedance 2.0 prompt from the selected/generated image.
+- `/api/generate-video`: submits image-to-video to official BytePlus ModelArk Seedance API, saves raw video, composes titles/logo/packshot.
 - `/api/remix-video`: recomposes titles/logo/packshot on a saved base video.
 - `/api/upload-video`: stores uploaded video and adds it to the video library.
 - `/api/delete-library-video`: removes a video record from the library.
@@ -231,11 +236,11 @@ Yandex GO logo variants:
 
 ## Video Notes
 
-`generate_video_with_kling()`:
+`generate_video_with_seedance()`:
 
-1. Builds Kling auth token from `KLING_ACCESS_KEY` and `KLING_SECRET_KEY`.
-2. Submits image-to-video to `https://api-singapore.klingai.com/v1/videos/image2video`.
-3. Polls until a video URL is returned or timeout.
+1. Builds BytePlus Ark auth from `ARK_API_KEY`, `BYTEPLUS_ARK_API_KEY`, or `SEEDANCE_API_KEY`.
+2. Submits Seedance image-to-video to `https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks`.
+3. Polls `GET /api/v3/contents/generations/tasks/{task_id}` until the response contains a video URL or timeout.
 4. Saves raw video to `output/videos/`.
 5. Calls `_compose_video_with_titles_and_packshot()`.
 
@@ -243,7 +248,7 @@ Video composition uses ffmpeg/ffprobe:
 
 - Adds headline segments over the base video.
 - Overlays brand logo.
-- Appends `assets/video/packshot.mp4` when available.
+- Appends the first 2 seconds of `assets/video/packshot.mp4` when available.
 - Saves final video under `output/videos/`.
 
 Docker installs `ffmpeg`; local machine also needs ffmpeg available for video rendering.

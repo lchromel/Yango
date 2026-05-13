@@ -871,6 +871,17 @@ def load_tokens_from_file() -> None:
                     "GEMINI_MODEL",
                     "KLING_ACCESS_KEY",
                     "KLING_SECRET_KEY",
+                    "ARK_API_KEY",
+                    "BYTEPLUS_ARK_API_KEY",
+                    "BYTEPLUS_API_KEY",
+                    "SEEDANCE_API_KEY",
+                    "SEEDANCE_MODEL",
+                    "BYTEPLUS_ARK_BASE_URL",
+                    "SEEDANCE_DURATION",
+                    "SEEDANCE_RESOLUTION",
+                    "SEEDANCE_GENERATE_AUDIO",
+                    "SEEDANCE_TIMEOUT_SECONDS",
+                    "SEEDANCE_POLL_INTERVAL_SECONDS",
                     "REPLICATE_API_TOKEN",
                     "REPLICATE_MODEL",
                     "RECRAFT_API_TOKEN",
@@ -1575,12 +1586,13 @@ def generate_video_prompt_with_openai(
             {
                 "role": "system",
                 "content": (
-                    "You write premium cinematic vehicle-video prompts for Kling 3.0. "
+                    "You write premium cinematic vehicle-video prompts for Seedance 2.0 image-to-video. "
                     "Output only one final prompt in English. "
                     "The prompt must be production-ready and based on the reference image plus the provided car model. "
                     "Preserve the visible car identity, color family, body style, and premium tone from the image. "
-                    "Write exactly six scenes labeled Scene 1 through Scene 6, then finish with one Style line. "
-                    "Each scene must be 1-2 sentences and specify camera placement, movement, motion feel, environment, lighting, and emotional tone. "
+                    "Write one continuous premium automotive commercial prompt with a concise time breakdown for a 10-second video. "
+                    "Use three short beats labeled 0-3s, 3-7s, and 7-10s, then finish with one Style and Sound line. "
+                    "Each beat must specify camera placement, movement, motion feel, environment, lighting, and emotional tone. "
                     "Keep the video realistic, expensive, and commercially strong. "
                     "No markdown, no bullet points, no JSON, no explanations."
                 ),
@@ -1591,13 +1603,13 @@ def generate_video_prompt_with_openai(
                     {
                         "type": "input_text",
                         "text": (
-                            "Create a Kling 3.0 video generation prompt for this car photo. "
+                            "Create a Seedance 2.0 image-to-video prompt for this car photo. "
                             f"Car model: {car}. "
                             f"Color name: {color}. "
-                            "Build a high-end automotive commercial with six scenes. "
+                            "Build a high-end automotive commercial as one fluid sequence with controlled camera motion. "
                             "Favor a modern premium city world unless the image clearly suggests another environment. "
-                            "Vary the scenes across: ultra-low tracking shot, macro detail shot, side tracking shot, interior cabin shot, aerial or drone hero motion, and final hero stop. "
-                            "Keep the car moving in most scenes and keep the world physically believable. "
+                            "Include ultra-low tracking energy, premium body-detail emphasis, and a final hero stop without making the car identity drift. "
+                            "Keep the car moving where plausible and keep the world physically believable. "
                             "Prefer bright daylight or refined city light by default, not golden hour, unless the reference image strongly suggests otherwise. "
                             f"Base image prompt for context: {base or 'not provided'}"
                         ),
@@ -1665,9 +1677,11 @@ def _extract_kling_status(payload: dict) -> str:
     return ""
 
 
-def _extract_kling_video_url(payload: dict) -> str:
+def _extract_video_url(payload: dict) -> str:
     preferred_keys = {
         "video_url",
+        "full_video",
+        "fullvideo",
         "video",
         "play_url",
         "download_url",
@@ -1680,15 +1694,17 @@ def _extract_kling_video_url(payload: dict) -> str:
         if key_name not in preferred_keys:
             continue
         if isinstance(value, str) and value.startswith(("http://", "https://")):
-            lower = value.lower()
-            if any(ext in lower for ext in (".mp4", ".mov", ".webm", "video")):
-                return value
+            return value
     for _key, value in _walk_json_values(payload):
         if isinstance(value, str) and value.startswith(("http://", "https://")):
             lower = value.lower()
             if any(ext in lower for ext in (".mp4", ".mov", ".webm")):
                 return value
     return ""
+
+
+def _extract_kling_video_url(payload: dict) -> str:
+    return _extract_video_url(payload)
 
 
 def _get_kling_task_payload(task_id: str) -> dict:
@@ -1888,6 +1904,161 @@ def _kling_create_image_to_video_task(image_url: str, prompt: str) -> dict:
     return _request_json(f"{base_url}/v1/videos/image2video", "POST", headers, payload)
 
 
+def _byteplus_ark_api_key() -> str:
+    api_key = (
+        os.getenv("ARK_API_KEY", "").strip()
+        or os.getenv("BYTEPLUS_ARK_API_KEY", "").strip()
+        or os.getenv("BYTEPLUS_API_KEY", "").strip()
+        or os.getenv("SEEDANCE_API_KEY", "").strip()
+    )
+    if not api_key:
+        raise RuntimeError("ARK_API_KEY, BYTEPLUS_ARK_API_KEY, or SEEDANCE_API_KEY is not set")
+    if api_key.lower().startswith("bearer "):
+        return api_key[7:].strip()
+    return api_key
+
+
+def _byteplus_ark_headers() -> dict:
+    return {
+        "Authorization": f"Bearer {_byteplus_ark_api_key()}",
+        "Content-Type": "application/json",
+    }
+
+
+def _byteplus_ark_base_url() -> str:
+    return os.getenv("BYTEPLUS_ARK_BASE_URL", "https://ark.ap-southeast.bytepluses.com/api/v3").strip().rstrip("/")
+
+
+def _byteplus_seedance_tasks_url() -> str:
+    return f"{_byteplus_ark_base_url()}/contents/generations/tasks"
+
+
+def _byteplus_seedance_model() -> str:
+    return os.getenv("SEEDANCE_MODEL", "dreamina-seedance-2-0-260128").strip() or "dreamina-seedance-2-0-260128"
+
+
+def _normalize_seedance_duration(raw_duration: str) -> str:
+    value = str(raw_duration or "").strip().lower()
+    if value == "auto":
+        return "10"
+    try:
+        duration = int(float(value or "10"))
+    except (TypeError, ValueError):
+        duration = 10
+    return str(min(15, max(4, duration)))
+
+
+def _normalize_seedance_resolution(raw_resolution: str) -> str:
+    value = str(raw_resolution or "").strip().lower()
+    if value in {"480p", "720p", "1080p"}:
+        return value
+    if value == "480":
+        return "480p"
+    if value == "1080":
+        return "1080p"
+    return "720p"
+
+
+def _seedance_ratio_for_image(image_url: str) -> str:
+    try:
+        raw = _read_image_bytes_from_url(image_url)
+        with Image.open(BytesIO(raw)) as image:
+            width, height = image.size
+    except Exception:
+        return "auto"
+
+    if width <= 0 or height <= 0:
+        return "auto"
+
+    target = width / height
+    candidates = {
+        "21:9": 21 / 9,
+        "16:9": 16 / 9,
+        "4:3": 4 / 3,
+        "1:1": 1.0,
+        "3:4": 3 / 4,
+        "9:16": 9 / 16,
+    }
+    return min(candidates, key=lambda key: abs(candidates[key] - target))
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    if not value:
+        return default
+    return value in {"1", "true", "yes", "on"}
+
+
+def _seedance_create_image_to_video_task(image_url: str, prompt: str) -> dict:
+    ratio = _seedance_ratio_for_image(image_url)
+    duration = int(_normalize_seedance_duration(os.getenv("SEEDANCE_DURATION", "10")))
+    resolution = _normalize_seedance_resolution(os.getenv("SEEDANCE_RESOLUTION", "720p"))
+    payload = {
+        "model": _byteplus_seedance_model(),
+        "content": [
+            {
+                "type": "text",
+                "text": str(prompt or "").strip(),
+            },
+            {
+                "type": "image_url",
+                "image_url": {"url": _image_input_data_url_from_url(image_url)},
+                "role": "first_frame",
+            },
+        ],
+        "ratio": ratio,
+        "duration": duration,
+        "resolution": resolution,
+        "generate_audio": _env_bool("SEEDANCE_GENERATE_AUDIO", True),
+    }
+    return _request_json(_byteplus_seedance_tasks_url(), "POST", _byteplus_ark_headers(), payload)
+
+
+def _get_seedance_task_payload(task_id: str) -> dict:
+    normalized_task_id = str(task_id or "").strip()
+    if not normalized_task_id:
+        raise RuntimeError("Seedance task id is missing")
+    return _request_json(f"{_byteplus_seedance_tasks_url()}/{normalized_task_id}", "GET", _byteplus_ark_headers())
+
+
+def _extract_seedance_task_id(payload: dict) -> str:
+    result = payload.get("Result") if isinstance(payload, dict) else None
+    if isinstance(result, dict):
+        value = str(result.get("TaskId") or result.get("id") or "").strip()
+        if value:
+            return value
+    for key, value in _walk_json_values(payload):
+        if str(key).lower() in {"id", "task_id", "taskid"} and isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _extract_seedance_status(payload: dict) -> str:
+    result = payload.get("Result") if isinstance(payload, dict) else None
+    if isinstance(result, dict):
+        value = str(result.get("TaskStatus") or "").strip().lower()
+        if value:
+            return value
+    for key, value in _walk_json_values(payload):
+        if str(key).lower() in {"status", "state", "task_status", "taskstatus"} and isinstance(value, str):
+            return value.strip().lower()
+    return ""
+
+
+def _extract_seedance_error(payload: dict) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    error = payload.get("Error") or payload.get("error")
+    if isinstance(error, dict):
+        return str(error.get("message") or error.get("Message") or error.get("code") or error).strip()
+    if error:
+        return str(error).strip()
+    for key, value in _walk_json_values(payload):
+        if str(key).lower() in {"error", "message", "error_message"} and value:
+            return str(value).strip()
+    return ""
+
+
 def _resolve_output_url_to_path(url: str) -> Path:
     value = str(url or "").strip()
     if not value.startswith("/"):
@@ -2028,15 +2199,13 @@ def _headline_segments(headlines: list[str], main_duration: float) -> list[tuple
     if not cleaned or main_duration <= 0:
         return []
     segments: list[tuple[float, float, str]] = []
-    cursor = 0.0
-    for text in cleaned:
-        if cursor >= main_duration:
+    visible_headlines = cleaned[:3]
+    for index, text in enumerate(visible_headlines):
+        start = main_duration * index / len(visible_headlines)
+        end = main_duration * (index + 1) / len(visible_headlines)
+        if end - start <= 0:
             break
-        end = min(main_duration, cursor + 5.0)
-        if end - cursor <= 0:
-            break
-        segments.append((cursor, end, text))
-        cursor = end
+        segments.append((start, end, text))
     return segments
 
 
@@ -2106,9 +2275,8 @@ def _compose_video_with_titles_and_packshot(
 
     width, height, duration = _video_dimensions_and_duration(base_video_path)
     packshot_file = packshot_path or DEFAULT_PACKSHOT_VIDEO
-    use_packshot = packshot_file.exists() and duration > 2.1
-    packshot_duration = 2.0 if use_packshot else 0.0
-    main_duration = max(0.1, duration - packshot_duration)
+    use_packshot = packshot_file.exists()
+    main_duration = max(0.1, duration)
 
     with tempfile.TemporaryDirectory(prefix="drive_perf_video_") as temp_dir_str:
         temp_dir = Path(temp_dir_str)
@@ -2123,8 +2291,6 @@ def _compose_video_with_titles_and_packshot(
                 "-i",
                 str(base_video_path),
                 "-an",
-                "-t",
-                f"{main_duration:.3f}",
                 "-vf",
                 filter_chain,
                 "-c:v",
@@ -2219,6 +2385,44 @@ def generate_video_with_kling(
         time.sleep(max(1.0, poll_interval))
 
     raise RuntimeError("Kling generation timed out")
+
+
+def generate_video_with_seedance(
+    image_url: str,
+    prompt: str,
+    headlines: Optional[list[str]] = None,
+    brand: str = "yango",
+) -> tuple[str, str, str]:
+    prediction = _seedance_create_image_to_video_task(image_url=image_url, prompt=prompt)
+    timeout_seconds = int(os.getenv("SEEDANCE_TIMEOUT_SECONDS", "600") or "600")
+    poll_interval = float(os.getenv("SEEDANCE_POLL_INTERVAL_SECONDS", "5") or "5")
+    task_id = _extract_seedance_task_id(prediction)
+    if not task_id:
+        error_detail = _extract_seedance_error(prediction)
+        if error_detail:
+            raise RuntimeError(f"Seedance task creation failed: {error_detail}")
+        raise RuntimeError("Seedance task id is missing")
+
+    started = time.time()
+    while time.time() - started < timeout_seconds:
+        payload = _get_seedance_task_payload(task_id)
+        status = _extract_seedance_status(payload)
+        if status in {"succeeded", "success", "completed", "done"}:
+            error_detail = _extract_seedance_error(payload)
+            if error_detail:
+                raise RuntimeError(f"Seedance generation failed: {error_detail}")
+            video_url = _extract_video_url(payload)
+            if not video_url:
+                raise RuntimeError("Seedance response did not include a video URL")
+            raw_local_video_url = _save_generated_video_local(video_url)
+            final_video_url = _compose_video_with_titles_and_packshot(raw_local_video_url, headlines or [], brand=brand)
+            return video_url, raw_local_video_url, final_video_url
+        if status in {"failed", "error", "canceled", "cancelled", "expired"}:
+            error_detail = _extract_seedance_error(payload) or status
+            raise RuntimeError(f"Seedance generation failed: {error_detail}")
+        time.sleep(max(1.0, poll_interval))
+
+    raise RuntimeError(f"Seedance generation timed out ({task_id})")
 
 
 def _save_generated_image_bytes(image_bytes: bytes, *, prefix: str = "generated", country: str = "") -> str:
@@ -2607,7 +2811,7 @@ def _download_remote_bytes(url: str) -> bytes:
         url,
         headers={
             "User-Agent": "Mozilla/5.0",
-            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            "Accept": "video/mp4,video/*,image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
         },
     )
     with urllib.request.urlopen(req, timeout=30) as response:
@@ -5914,7 +6118,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not isinstance(headlines_raw, list):
                     headlines_raw = []
                 headlines = [str(item or "").strip() for item in headlines_raw if str(item or "").strip()]
-                video_url, raw_local_video_url, local_video_url = generate_video_with_kling(
+                video_url, raw_local_video_url, local_video_url = generate_video_with_seedance(
                     image_url=image_url,
                     prompt=prompt,
                     headlines=headlines,
