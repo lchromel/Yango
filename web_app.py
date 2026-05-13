@@ -1443,6 +1443,8 @@ Requirements:
 - Keep the background physically close to the car: cropped architecture, road material, curb geometry, walls, window bands, planters, shadows, and small slices of distant context.
 - Vehicle profile should shape the scene naturally: sports cars can use faster city corridors, premium cars can use upscale arrivals or refined boulevards, SUVs can use broader touring roads, off-road vehicles can use dry rugged terrain where locally plausible, and urban cars can use polished business streets.
 - Use premium Fujifilm GFX100 automotive photography language: crisp, dimensional, refined, high-end, and natural rather than synthetic.
+- Use super-wide or ultra-wide automotive lens language by default: 18-24mm equivalent, low camera placement, near-ground or near-fender perspective, strong foreground stretch, deep leading lines, and exaggerated hero scale.
+- Keep the wide-angle perspective commercially powerful but physically believable: no warped wheels, no melted body panels, no broken proportions, and no fisheye distortion unless the selected angle explicitly implies it.
 - Keep the main subject strictly the car. Do not add drivers, passengers, app UI, logos, readable text, or watermarks.
 - Always include the exact car with latest body-year naming in the final prompt.
 - Always use the selected car paint exactly: {color}.
@@ -1455,7 +1457,7 @@ Requirements:
 - Roads and pavement must be dry: no puddles, no wet road, no rain residue, no reflective water patches.
 - Do not use sunset or orange golden-hour lighting. Prefer early morning, late morning, midday, late afternoon before sunset, or blue-hour / early evening light.
 - Build environment effects from the selected road surface only. Dust/sand appears only where the local terrain logically supports it; avoid dust trails on clean city asphalt.
-- Make the camera angle unusual, bold, and commercially powerful, avoiding generic eye-level catalog shots.
+- Make the camera angle unusual, bold, wide-angle, and commercially powerful, avoiding generic eye-level catalog shots.
 - Keep the prompt concise but richly visual, describing what the camera actually sees at close photographic scale.
 """
 
