@@ -1125,6 +1125,90 @@ def _drive_location_guide(country: str, city: str) -> str:
     )
 
 
+def _parse_hex_color(color_hex: str) -> Optional[tuple[int, int, int]]:
+    value = str(color_hex or "").strip().lstrip("#")
+    if len(value) == 3:
+        value = "".join(char * 2 for char in value)
+    if len(value) != 6 or not re.fullmatch(r"[0-9a-fA-F]{6}", value):
+        return None
+    return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+
+
+def _automotive_paint_from_hex(color_hex: str) -> str:
+    rgb = _parse_hex_color(color_hex)
+    if not rgb:
+        return "factory gloss automotive paint"
+
+    r, g, b = [channel / 255 for channel in rgb]
+    max_channel = max(r, g, b)
+    min_channel = min(r, g, b)
+    lightness = (max_channel + min_channel) / 2
+    chroma = max_channel - min_channel
+
+    if chroma < 0.08:
+        if lightness < 0.16:
+            return "solid gloss black automotive paint"
+        if lightness < 0.36:
+            return "dark graphite metallic automotive paint"
+        if lightness < 0.72:
+            return "metallic silver automotive paint"
+        return "pearl white automotive paint"
+
+    if max_channel == r:
+        hue = ((g - b) / chroma) % 6
+    elif max_channel == g:
+        hue = ((b - r) / chroma) + 2
+    else:
+        hue = ((r - g) / chroma) + 4
+    hue *= 60
+
+    if hue < 15 or hue >= 345:
+        return "deep gloss red automotive paint" if lightness < 0.55 else "bright gloss red automotive paint"
+    if hue < 38:
+        return "copper orange metallic automotive paint" if lightness >= 0.34 else "burnt orange metallic automotive paint"
+    if hue < 55:
+        return "amber gold metallic automotive paint"
+    if hue < 85:
+        return "champagne gold metallic automotive paint" if lightness >= 0.45 else "olive gold metallic automotive paint"
+    if hue < 160:
+        return "deep green metallic automotive paint" if lightness < 0.46 else "emerald green metallic automotive paint"
+    if hue < 205:
+        return "teal metallic automotive paint"
+    if hue < 255:
+        return "deep blue metallic automotive paint" if lightness < 0.5 else "bright blue metallic automotive paint"
+    if hue < 295:
+        return "violet metallic automotive paint"
+    if hue < 345:
+        return "burgundy metallic automotive paint" if lightness < 0.48 else "magenta red metallic automotive paint"
+    return "factory gloss automotive paint"
+
+
+def _resolve_drive_paint_description(color_name: str, color_hex: str) -> str:
+    label = str(color_name or "").strip().lower()
+    preset_paints = {
+        "black": "solid gloss black automotive paint",
+        "gloss black": "solid gloss black automotive paint",
+        "white": "pearl white automotive paint",
+        "pearl white": "pearl white automotive paint",
+        "silver": "metallic silver automotive paint",
+        "metallic silver": "metallic silver automotive paint",
+        "dark silver": "dark graphite metallic automotive paint",
+        "graphite metallic": "dark graphite metallic automotive paint",
+        "red": "deep gloss red automotive paint",
+        "deep red": "deep gloss red automotive paint",
+        "copper orange": "copper orange metallic automotive paint",
+        "deep blue": "deep blue metallic automotive paint",
+        "champagne gold": "champagne gold metallic automotive paint",
+    }
+    if label in preset_paints:
+        return preset_paints[label]
+    if color_hex:
+        return _automotive_paint_from_hex(color_hex)
+    if label:
+        return f"uniform {label} factory automotive paint"
+    return "pearl white automotive paint"
+
+
 def _default_vehicle_color(vehicle_type: str) -> str:
     vehicle_type = (vehicle_type or "car").strip().lower()
     if vehicle_type in {"moto", "tuktuk"}:
@@ -1282,9 +1366,11 @@ def call_yango_drive_openai(
     location_parts = [part for part in [city.strip(), country.strip()] if part]
     location_text = ", ".join(location_parts) or None
 
+    paint_description = _resolve_drive_paint_description(color_name, color_hex)
+
     request = PromptRequest(
         car=car_model,
-        color=color_name,
+        color=paint_description,
         location_text=location_text,
         preferred_angle=angle_rules or None,
         preferred_angle_label=angle_label or None,
@@ -1304,7 +1390,7 @@ def call_yango_drive_openai(
     vehicle_profile = (request.vehicle_profile or "urban").strip()
     location_name = ", ".join(part for part in [city.strip(), country.strip()] if part) or "the selected city"
     location_guide = _drive_location_guide(country, city)
-    color = color_name.strip() or "white"
+    color = paint_description
     angle_instruction = angle_rules or "Choose a bold premium automotive angle that fits the road geometry."
     wish = str(drive_wish or "").strip()
     wish_block = (
@@ -1315,7 +1401,6 @@ def call_yango_drive_openai(
         if wish
         else ""
     )
-    _ = color_hex
 
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
@@ -1329,11 +1414,11 @@ Selected inputs:
 - Vehicle profile: {vehicle_profile}
 - Country: {country or "not specified"}
 - City: {city or "not specified"}
-- Required location: {location_name}
+- Location reference: {location_name}
 - Preferred angle label: {angle_label or "auto"}
 - Preferred angle instructions: {angle_instruction}
 
-Location guide:
+Local street detail guide:
 {location_guide}
 {wish_block}
 
@@ -1350,20 +1435,28 @@ NEGATIVE CUES
 
 Requirements:
 - Output only the final prompt text, no explanations.
-- The scene must be unmistakably set in {location_name}, not Dubai unless the selected city is Dubai.
-- Use authentic local architecture, road surfaces, curbs, lane markings, vegetation, climate, daylight, and nearby street details for the selected city.
-- Never mention Dubai, UAE, Gulf, desert haze, palms, villas, Dubai Marina, Jumeirah, or Sheikh Zayed Road unless the selected city/country is in UAE and the detail is physically appropriate.
-- Keep it as a premium realistic automotive commercial, expensive and believable, with Fujifilm GFX100 commercial photography language.
+- The image must feel first like a premium realistic automotive commercial: expensive, believable, dynamic, and composed around the car.
+- Use {location_name} as the street-world reference, but keep localization supportive rather than dominant.
+- Express the selected city through 2-4 plausible close-range visual cues: road surface, curb edges, lane texture, facade fragments, vegetation, street furniture, climate, and daylight.
+- Do not turn the prompt into a landmark checklist, skyline panorama, travel postcard, or generic city description.
+- Avoid mismatched Dubai/UAE cues unless the selected city is in UAE; for UAE cities, use only cues that fit that city and shot.
+- Keep the background physically close to the car: cropped architecture, road material, curb geometry, walls, window bands, planters, shadows, and small slices of distant context.
+- Vehicle profile should shape the scene naturally: sports cars can use faster city corridors, premium cars can use upscale arrivals or refined boulevards, SUVs can use broader touring roads, off-road vehicles can use dry rugged terrain where locally plausible, and urban cars can use polished business streets.
+- Use premium Fujifilm GFX100 automotive photography language: crisp, dimensional, refined, high-end, and natural rather than synthetic.
 - Keep the main subject strictly the car. Do not add drivers, passengers, app UI, logos, readable text, or watermarks.
 - Always include the exact car with latest body-year naming in the final prompt.
-- Always use the selected car color.
+- Always use the selected car paint exactly: {color}.
+- The car body must be one uniform factory paint color across all visible panels.
+- Do not create two-tone paint, black-and-color patches, mottled paint, camouflage, vinyl wrap graphics, flames, decals, racing livery, dirty stains, or random color spots.
+- Black details are allowed only as realistic tires, glass, shadowed grilles, trim, or wheels, not as irregular black patches on the painted body.
 - Follow the preferred angle exactly if one is provided.
 - Vehicle heading must align with road direction and lane perspective.
-- Always include visible road markings or guidance lines appropriate to the selected city's road type.
+- Include road markings, edge lines, arrows, curb lines, or other guidance lines when natural for the road type, and align them with vehicle direction.
 - Roads and pavement must be dry: no puddles, no wet road, no rain residue, no reflective water patches.
 - Do not use sunset or orange golden-hour lighting. Prefer early morning, late morning, midday, late afternoon before sunset, or blue-hour / early evening light.
-- Build environment effects from the selected city only. Dust/sand appears only where the local terrain logically supports it.
+- Build environment effects from the selected road surface only. Dust/sand appears only where the local terrain logically supports it; avoid dust trails on clean city asphalt.
 - Make the camera angle unusual, bold, and commercially powerful, avoiding generic eye-level catalog shots.
+- Keep the prompt concise but richly visual, describing what the camera actually sees at close photographic scale.
 """
 
     response = client.responses.create(
@@ -1373,7 +1466,8 @@ Requirements:
                 "role": "system",
                 "content": (
                     "You write production-ready prompts for Recraft v4 automotive image generation. "
-                    "The most important rule is geographic fidelity: the selected country and city override all prior/default location habits. "
+                    "The most important rule is premium automotive advertising quality: a striking car-first hero shot with physically believable motion, reflections, and road contact. "
+                    "Use the selected country and city as local street-detail guidance, not as a dominant travel-scene brief. "
                     "Return only the final structured prompt text."
                 ),
             },

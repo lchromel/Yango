@@ -1,4 +1,4 @@
-const VEHICLE_DATA_URL = "./assets/data/vehicles.json?v=20260507-rwanda";
+const VEHICLE_DATA_URL = "./assets/data/vehicles.json?v=20260513-cis";
 const SERVICE_OPTIONS = [
   { label: "Ride-hailing", value: "ride-hailing" },
   { label: "Yango Drive", value: "yango-drive" },
@@ -41,11 +41,14 @@ const TOP_RENTAL_CARS_DUBAI = [
   "Lamborghini Huracan",
 ];
 const PRESET_COLORS = [
-  { label: "Black", hex: "#000000" },
-  { label: "White", hex: "#e5e5e5" },
-  { label: "Silver", hex: "#bdbdbd" },
-  { label: "Dark Silver", hex: "#98a3bd" },
-  { label: "Red", hex: "#c40606" },
+  { label: "Pearl White", hex: "#f1f0ea" },
+  { label: "Gloss Black", hex: "#050505" },
+  { label: "Metallic Silver", hex: "#bfc2c5" },
+  { label: "Graphite Metallic", hex: "#565b61" },
+  { label: "Deep Red", hex: "#8f0909" },
+  { label: "Copper Orange", hex: "#b25722" },
+  { label: "Deep Blue", hex: "#122d5c" },
+  { label: "Champagne Gold", hex: "#c2a56e" },
   { label: "Custom", hex: "#97a56e", custom: true },
 ];
 const ANGLE_PRESETS = [
@@ -225,9 +228,9 @@ const state = {
   selectedCarModel: "",
   customCarModel: "",
   carMenuOpen: false,
-  colorHex: "#e5e5e5",
-  colorLabel: "White",
-  selectedPreset: "White",
+  colorHex: "#f1f0ea",
+  colorLabel: "Pearl White",
+  selectedPreset: "Pearl White",
   selectedAngle: "Front 3/4",
   driveWish: "",
   selectedCountry: "",
