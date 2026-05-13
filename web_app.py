@@ -1588,13 +1588,18 @@ def generate_video_prompt_with_openai(
                 "content": (
                     "You write premium cinematic vehicle-video prompts for Seedance 2.0 image-to-video. "
                     "Output only one final prompt in English. "
-                    "The prompt must be production-ready and based on the reference image plus the provided car model. "
-                    "Preserve the visible car identity, color family, body style, and premium tone from the image. "
-                    "Write one continuous premium automotive commercial prompt with a concise time breakdown for a 10-second video. "
-                    "Use three short beats labeled 0-3s, 3-7s, and 7-10s, then finish with one Style and Sound line. "
-                    "Each beat must specify camera placement, movement, motion feel, environment, lighting, and emotional tone. "
-                    "Keep the video realistic, expensive, and commercially strong. "
-                    "No markdown, no bullet points, no JSON, no explanations."
+                    "The prompt must follow Seedance 2.0 best practices: subject setup, first-frame reference role, "
+                    "scene/environment, action/motion, camera movement, timing breakdown, transitions, sound design, and style/mood. "
+                    "Treat the supplied car image as the first frame and primary identity reference, but do not mention API internals. "
+                    "Preserve the exact visible car identity, paint color family, body style, wheels, proportions, road contact, and premium tone. "
+                    "Write one continuous 10-second automotive commercial, not unrelated cuts. "
+                    "Use exactly three timed beats labeled 0-3s, 3-7s, and 7-10s, then finish with one Style and Sound line. "
+                    "Each beat must specify the subject, environment, action, camera placement, camera movement, motion feel, lighting, and emotional tone. "
+                    "Use precise camera language such as ultra-low tracking, slow push-in, side follow shot, subtle orbit, macro pass, crane rise, or pull-back hero reveal. "
+                    "Use physically believable movement: stable car geometry, no morphing, no drifting badge or grille, no melted wheels, no impossible reflections. "
+                    "Avoid realistic human faces, readable text, UI overlays, random logos, watermarks, subtitles, or scene elements that compete with the car. "
+                    "Keep it realistic, expensive, commercially strong, and suitable for Yango Drive performance ads. "
+                    "No markdown bullets, no JSON, no explanations."
                 ),
             },
             {
@@ -1606,11 +1611,13 @@ def generate_video_prompt_with_openai(
                             "Create a Seedance 2.0 image-to-video prompt for this car photo. "
                             f"Car model: {car}. "
                             f"Color name: {color}. "
-                            "Build a high-end automotive commercial as one fluid sequence with controlled camera motion. "
+                            "The provided image is the first frame reference; keep the generated video anchored to that exact car and visual world. "
+                            "Build a high-end automotive commercial as one fluid sequence with controlled camera motion and clean transitions. "
                             "Favor a modern premium city world unless the image clearly suggests another environment. "
-                            "Include ultra-low tracking energy, premium body-detail emphasis, and a final hero stop without making the car identity drift. "
-                            "Keep the car moving where plausible and keep the world physically believable. "
+                            "Include an opening first-frame continuation, a dynamic mid-video motion beat, and a final hero stop or pull-back reveal. "
+                            "Keep the car moving where plausible and keep the world physically believable, with road texture, curb lines, reflections, and light direction staying consistent. "
                             "Prefer bright daylight or refined city light by default, not golden hour, unless the reference image strongly suggests otherwise. "
+                            "Include subtle automotive sound design or premium cinematic music guidance in the final Style and Sound line. "
                             f"Base image prompt for context: {base or 'not provided'}"
                         ),
                     },

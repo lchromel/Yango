@@ -251,6 +251,14 @@ Video composition uses ffmpeg/ffprobe:
 - Appends the first 2 seconds of `assets/video/packshot.mp4` when available.
 - Saves final video under `output/videos/`.
 
+Video prompts are written specifically for Seedance 2.0 image-to-video:
+
+- Treat the selected/generated image as the first-frame identity reference.
+- Use a continuous 10-second automotive commercial structure: `0-3s`, `3-7s`, `7-10s`.
+- Include subject setup, environment, action/motion, camera movement, timing, transitions, sound, and style.
+- Preserve car identity, paint, proportions, wheels, road contact, and lighting consistency.
+- Avoid realistic human faces, readable text, UI overlays, random logos, watermarks, and car morphing.
+
 Docker installs `ffmpeg`; local machine also needs ffmpeg available for video rendering.
 
 ## Telegram Bot Notes
