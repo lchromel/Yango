@@ -51,7 +51,7 @@ EPHEMERAL_OUTPUT_ROOT = ROOT / "output"
 OUTPUT_DIR = EPHEMERAL_OUTPUT_ROOT / "banners"
 PERSISTENT_GENERATED_DIR = PERSISTENT_OUTPUT_ROOT / "generated"
 TEMP_GENERATED_DIR = EPHEMERAL_OUTPUT_ROOT / "generated"
-GENERATED_DIR = TEMP_GENERATED_DIR
+GENERATED_DIR = PERSISTENT_GENERATED_DIR
 ZIP_DIR = EPHEMERAL_OUTPUT_ROOT / "archives"
 UNCROP_DIR = EPHEMERAL_OUTPUT_ROOT / "uncrop"
 UPSCALE_DIR = EPHEMERAL_OUTPUT_ROOT / "upscaled"
@@ -566,22 +566,46 @@ def _public_image_library_record(record: dict) -> dict:
     }
 
 
+def _is_missing_local_output_url(url: str) -> bool:
+    value = str(url or "").strip()
+    if not value:
+        return True
+    parsed = urlparse(value)
+    if value.startswith("/output/"):
+        output_path = value
+    elif parsed.scheme in {"http", "https"} and parsed.path.startswith("/output/"):
+        output_path = parsed.path
+    else:
+        return False
+    try:
+        local_path = _resolve_public_file_path(output_path)
+    except Exception:
+        return True
+    return not (local_path.exists() and local_path.is_file())
+
+
 def list_image_library() -> list[dict]:
     with IMAGE_LIBRARY_LOCK:
         records = _load_image_library_records_unlocked()
+        visible_records: list[dict] = []
         changed = False
         for item in records:
+            image_url = str(item.get("image_url", "")).strip()
+            if _is_missing_local_output_url(image_url):
+                changed = True
+                continue
             thumbnail_url = _ensure_image_thumbnail_url(
-                str(item.get("image_url", "")).strip(),
+                image_url,
                 country=str(item.get("country", "")).strip(),
                 existing_url=str(item.get("thumbnail_url", "")).strip(),
             )
             if thumbnail_url and thumbnail_url != str(item.get("thumbnail_url", "")).strip():
                 item["thumbnail_url"] = thumbnail_url
                 changed = True
+            visible_records.append(item)
         if changed:
-            _save_image_library_records_unlocked(records)
-        return [_public_image_library_record(item) for item in records]
+            _save_image_library_records_unlocked(visible_records)
+        return [_public_image_library_record(item) for item in visible_records]
 
 
 def _upsert_image_library_record(
@@ -6460,6 +6484,20 @@ class Handler(SimpleHTTPRequestHandler):
                     "library_image": library_image,
                 },
             )
+        except FileNotFoundError as exc:
+            message = str(exc)
+            if "Local image not found" in message:
+                self._send_json(
+                    HTTPStatus.GONE,
+                    {
+                        "error": (
+                            "Source image is no longer available. "
+                            "Please generate or upload the image again."
+                        )
+                    },
+                )
+                return
+            self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": message})
         except Exception as exc:
             self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
 
