@@ -253,8 +253,10 @@ Video composition uses ffmpeg/ffprobe:
 
 Video prompts are written specifically for Seedance 2.0 image-to-video:
 
+- Start with `@Image1 as the main visual reference and first frame.`
 - Treat the selected/generated image as the first-frame identity reference.
-- Use a continuous 10-second automotive commercial structure: `0-3s`, `3-7s`, `7-10s`.
+- Use a dynamic 10-second automotive commercial structure: `0-2s`, `2-4s`, `4-6s`, `6-8s`, `8-10s`.
+- Include varied city-driving angles: low front tracking, side tracking, wheel macro, detail montage, and final hero reveal/orbit.
 - Include subject setup, environment, action/motion, camera movement, timing, transitions, sound, and style.
 - Preserve car identity, paint, proportions, wheels, road contact, and lighting consistency.
 - Avoid realistic human faces, readable text, UI overlays, random logos, watermarks, and car morphing.
