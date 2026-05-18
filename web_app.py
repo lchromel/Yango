@@ -1421,6 +1421,10 @@ def call_yango_drive_openai(
     except Exception:
         request.vehicle_profile = infer_vehicle_profile_from_keywords(request)
 
+    if country.strip().lower() == "uae":
+        request.location_text = None
+        return generate_prompt_with_openai(request)
+
     car_descriptor = (request.car_with_year or request.car).strip()
     vehicle_profile = (request.vehicle_profile or "urban").strip()
     location_name = ", ".join(part for part in [city.strip(), country.strip()] if part) or "the selected city"
@@ -1471,6 +1475,7 @@ NEGATIVE CUES
 Requirements:
 - Output only the final prompt text, no explanations.
 - The image must feel first like a premium realistic automotive commercial: expensive, believable, dynamic, and composed around the car.
+- For non-UAE countries, use the same premium car-ad logic previously used for Dubai/UAE, translated to the selected country and city through equivalent local roads, materials, architecture, climate, and street atmosphere.
 - Use {location_name} as the street-world reference, but keep localization supportive rather than dominant.
 - Express the selected city through 2-4 plausible close-range visual cues: road surface, curb edges, lane texture, facade fragments, vegetation, street furniture, climate, and daylight.
 - Do not turn the prompt into a landmark checklist, skyline panorama, travel postcard, or generic city description.
