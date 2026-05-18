@@ -3235,6 +3235,7 @@ async function generateEditedSourceImage() {
         editPrompt: EDIT_CLEANUP_PROMPT,
         aspectRatio: "3:2",
         country: state.selectedCountry,
+        service: getSelectedService().label,
       }),
     });
     const payload = await response.json();
@@ -3307,6 +3308,7 @@ function buildRenderPayload() {
     imageUrl: state.bannerSourceImageUrl,
     bannerSourceUrl: selectedLibraryImage?.banner_source_url || "",
     country: isDriveService() ? state.driveCountry : state.selectedCountry,
+    service: isDriveService() ? "yango-drive" : "ride-hailing",
     imageScale: globalImagePosition.imageScalePercent / 100,
     imageShiftX: stepToShiftPx(globalImagePosition.imageShiftXStep),
     // UX rule: moving Y slider right should move image up.
@@ -3788,6 +3790,7 @@ async function applyQuickImageEdit(editPrompt, referenceImageUrl = "") {
         editPrompt,
         referenceImageUrl: resolvedReferenceImageUrl,
         country: state.selectedCountry,
+        service: getSelectedService().label,
       }),
     });
     const payload = await response.json();
@@ -3868,6 +3871,7 @@ promptApplyBtn.addEventListener("click", () => {
           body: JSON.stringify({
             prompt: state.basePromptText,
             country: state.selectedCountry,
+            service: getSelectedService().label,
           }),
         });
       } else {
@@ -3879,6 +3883,7 @@ promptApplyBtn.addEventListener("click", () => {
             imageUrl: state.imageUrl,
             editPrompt,
             country: state.selectedCountry,
+            service: getSelectedService().label,
           }),
         });
       }

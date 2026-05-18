@@ -53,8 +53,9 @@ PERSISTENT_GENERATED_DIR = PERSISTENT_OUTPUT_ROOT / "generated"
 TEMP_GENERATED_DIR = EPHEMERAL_OUTPUT_ROOT / "generated"
 GENERATED_DIR = PERSISTENT_GENERATED_DIR
 ZIP_DIR = EPHEMERAL_OUTPUT_ROOT / "archives"
-UNCROP_DIR = EPHEMERAL_OUTPUT_ROOT / "uncrop"
-UPSCALE_DIR = EPHEMERAL_OUTPUT_ROOT / "upscaled"
+PERSISTENT_LIBRARY_DIR = PERSISTENT_OUTPUT_ROOT / "library"
+UNCROP_DIR = PERSISTENT_OUTPUT_ROOT / "uncrop"
+UPSCALE_DIR = PERSISTENT_OUTPUT_ROOT / "upscaled"
 VIDEO_DIR = EPHEMERAL_OUTPUT_ROOT / "videos"
 DEFAULT_PACKSHOT_VIDEO = ROOT / "assets" / "video" / "packshot.mp4"
 IMAGE_LIBRARY_FILE = PERSISTENT_OUTPUT_ROOT / "image_library.json"
@@ -482,6 +483,7 @@ def is_request_authorized_by_cookie(cookie_header: str) -> bool:
 def _ensure_output_directories() -> None:
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     PERSISTENT_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    PERSISTENT_LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ZIP_DIR.mkdir(parents=True, exist_ok=True)
     UNCROP_DIR.mkdir(parents=True, exist_ok=True)
@@ -528,6 +530,12 @@ def _infer_library_kind_from_name(file_name: str) -> str:
 
 def _infer_library_kind_from_url(image_url: str) -> str:
     path = urlparse(str(image_url or "").strip()).path.lower()
+    if "/library/" in path:
+        if "/uploaded/" in path:
+            return "uploaded"
+        if "edited" in path:
+            return "edited"
+        return "generated"
     if "/generated/uploaded/" in path or "/generated/uploaded-drive/" in path:
         return "uploaded"
     return _infer_library_kind_from_name(Path(path).name)
@@ -541,15 +549,177 @@ def _normalize_image_country_bucket(country: str, *, fallback: str = "other") ->
     return safe_value or fallback
 
 
+def _normalize_library_segment(value: str, *, fallback: str) -> str:
+    safe_value = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(value or "").strip()).strip("_").lower()
+    return safe_value or fallback
+
+
+def _library_service_bucket(service: str, kind: str = "") -> str:
+    normalized_service = _normalize_service_key(service)
+    if normalized_service in {"ride-hailing", "yango-drive", "yango-pro", "yandex-go"}:
+        return normalized_service
+    normalized_kind = str(kind or "").strip().lower().replace("_", "-")
+    if "3d" in normalized_kind:
+        return "3d"
+    if normalized_kind == "uploaded":
+        return "uploaded"
+    return "ride-hailing"
+
+
+def _output_url_for_path(path: Path) -> str:
+    resolved = path.resolve()
+    for root in (PERSISTENT_OUTPUT_ROOT.resolve(), EPHEMERAL_OUTPUT_ROOT.resolve()):
+        try:
+            relative = resolved.relative_to(root)
+        except ValueError:
+            continue
+        return f"/output/{relative.as_posix()}"
+    raise RuntimeError("Path is outside output directory")
+
+
+def _library_package_dir_from_url(image_url: str) -> Optional[Path]:
+    value = str(image_url or "").strip()
+    if not value:
+        return None
+    try:
+        local_path = _resolve_public_file_path(value)
+    except Exception:
+        return None
+    try:
+        relative = local_path.resolve().relative_to(PERSISTENT_LIBRARY_DIR.resolve())
+    except ValueError:
+        return None
+    if len(relative.parts) < 4:
+        return None
+    return PERSISTENT_LIBRARY_DIR.joinpath(*relative.parts[:3])
+
+
+def _asset_package_manifest_path(package_dir: Path) -> Path:
+    return package_dir / "manifest.json"
+
+
+def _update_asset_package_manifest(package_dir: Path, values: dict) -> None:
+    manifest_path = _asset_package_manifest_path(package_dir)
+    manifest: dict = {}
+    if manifest_path.exists():
+        try:
+            raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                manifest = raw
+        except Exception:
+            manifest = {}
+    manifest.update({key: value for key, value in values.items() if value not in (None, "")})
+    manifest["updated_at"] = _utc_timestamp()
+    if "created_at" not in manifest:
+        manifest["created_at"] = manifest["updated_at"]
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _image_package_descriptor(
+    *,
+    kind: str = "",
+    label: str = "",
+    original_name: str = "",
+    source_url: str = "",
+    car_model: str = "",
+    color_name: str = "",
+) -> str:
+    candidates = [
+        " ".join(part for part in (car_model, color_name) if str(part or "").strip()),
+        label,
+        Path(original_name).stem if original_name else "",
+        Path(urlparse(str(source_url or "")).path).stem,
+        kind,
+        "image",
+    ]
+    for candidate in candidates:
+        normalized = _normalize_library_segment(candidate, fallback="")
+        if normalized and normalized not in {"generated", "edited", "source", "upload"}:
+            return normalized[:72]
+    return "image"
+
+
+def _save_image_asset_package_bytes(
+    image_bytes: bytes,
+    *,
+    kind: str,
+    country: str = "",
+    service: str = "",
+    label: str = "",
+    original_name: str = "",
+    source_url: str = "",
+    car_model: str = "",
+    color_name: str = "",
+) -> dict:
+    if not image_bytes:
+        raise ValueError("image_bytes is required")
+
+    _ensure_output_directories()
+    source_hash = hashlib.sha256(image_bytes).hexdigest()[:16]
+    service_bucket = _library_service_bucket(service, kind)
+    country_fallback = "3d" if "3d" in str(kind or "").lower() else "other"
+    country_bucket = _normalize_image_country_bucket(country, fallback=country_fallback)
+    descriptor = _image_package_descriptor(
+        kind=kind,
+        label=label,
+        original_name=original_name,
+        source_url=source_url,
+        car_model=car_model,
+        color_name=color_name,
+    )
+    folder_name = f"{descriptor}_{source_hash}"
+    package_dir = PERSISTENT_LIBRARY_DIR / service_bucket / country_bucket / folder_name
+    package_dir.mkdir(parents=True, exist_ok=True)
+
+    source_path = package_dir / "source.png"
+    with Image.open(BytesIO(image_bytes)) as source_image:
+        image = source_image.convert("RGB")
+        if not source_path.exists():
+            image.save(source_path, format="PNG", optimize=True)
+        thumb_path = package_dir / "thumb.jpg"
+        if not thumb_path.exists():
+            thumbnail = image.copy()
+            thumbnail.thumbnail((THUMBNAIL_MAX_SIDE, THUMBNAIL_MAX_SIDE), Image.Resampling.LANCZOS)
+            thumbnail.save(
+                thumb_path,
+                format="JPEG",
+                quality=THUMBNAIL_QUALITY,
+                optimize=True,
+                progressive=True,
+            )
+
+    _update_asset_package_manifest(
+        package_dir,
+        {
+            "kind": kind,
+            "country": country,
+            "service": service_bucket,
+            "label": label or descriptor,
+            "original_name": original_name,
+            "source_url": source_url,
+            "source_hash": source_hash,
+        },
+    )
+    return {
+        "package_dir": package_dir,
+        "package_url": _output_url_for_path(package_dir) + "/",
+        "source_url": _output_url_for_path(source_path),
+        "thumbnail_url": _output_url_for_path(package_dir / "thumb.jpg"),
+        "uncropped_url": _output_url_for_path(package_dir / "uncropped.png"),
+    }
+
+
 def _public_image_library_record(record: dict) -> dict:
     image_url = str(record.get("image_url", "")).strip()
     banner_source_url = str(record.get("banner_source_url", "")).strip()
     thumbnail_url = str(record.get("thumbnail_url", "")).strip()
+    asset_package_url = str(record.get("asset_package_url", "")).strip()
     return {
         "id": str(record.get("id", "")).strip(),
         "image_url": image_url,
         "thumbnail_url": thumbnail_url,
         "banner_source_url": banner_source_url,
+        "asset_package_url": asset_package_url,
         "effective_banner_source_url": banner_source_url or image_url,
         "banner_ready": bool(banner_source_url),
         "kind": str(record.get("kind", "generated")).strip() or "generated",
@@ -655,6 +825,9 @@ def _upsert_image_library_record(
         record["original_name"] = str(original_name or record.get("original_name") or "").strip()
         record["edit_prompt"] = str(edit_prompt or record.get("edit_prompt") or "").strip()
         record["source_image_url"] = str(source_image_url or record.get("source_image_url") or "").strip()
+        package_dir = _library_package_dir_from_url(normalized_image_url)
+        if package_dir is not None:
+            record["asset_package_url"] = _output_url_for_path(package_dir) + "/"
         record["thumbnail_url"] = _ensure_image_thumbnail_url(
             normalized_image_url,
             country=record["country"],
@@ -663,7 +836,17 @@ def _upsert_image_library_record(
         if label:
             record["label"] = str(label).strip()
         elif not str(record.get("label", "")).strip():
-            record["label"] = Path(urlparse(normalized_image_url).path).stem or record["kind"]
+            manifest_label = ""
+            if package_dir is not None:
+                manifest_path = _asset_package_manifest_path(package_dir)
+                if manifest_path.exists():
+                    try:
+                        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                        if isinstance(manifest, dict):
+                            manifest_label = str(manifest.get("label", "")).strip()
+                    except Exception:
+                        manifest_label = ""
+            record["label"] = manifest_label or Path(urlparse(normalized_image_url).path).stem or record["kind"]
 
         records.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
         _save_image_library_records_unlocked(records)
@@ -2127,7 +2310,8 @@ def _resolve_public_file_path(path: str) -> Path:
     value = unquote(str(path or "").strip())
     if value.startswith("/output/"):
         relative_path = value.removeprefix("/output/")
-        if relative_path.startswith("generated/"):
+        persistent_prefixes = ("generated/", "library/", "uncrop/", "upscaled/")
+        if relative_path.startswith(persistent_prefixes):
             persistent_path = (PERSISTENT_OUTPUT_ROOT / relative_path).resolve()
             temp_path = (EPHEMERAL_OUTPUT_ROOT / relative_path).resolve()
             local_path = persistent_path if persistent_path.exists() else temp_path
@@ -2468,41 +2652,59 @@ def generate_video_with_seedance(
     raise RuntimeError(f"Seedance generation timed out ({task_id})")
 
 
-def _save_generated_image_bytes(image_bytes: bytes, *, prefix: str = "generated", country: str = "") -> str:
-    _ensure_output_directories()
+def _save_generated_image_bytes(
+    image_bytes: bytes,
+    *,
+    prefix: str = "generated",
+    country: str = "",
+    service: str = "",
+    label: str = "",
+) -> str:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_suffix = uuid.uuid4().hex[:8]
-    file_name = f"{prefix}_{stamp}_{unique_suffix}.png"
-    bucket = _normalize_image_country_bucket(country, fallback="other")
-    target_dir = GENERATED_DIR / bucket
-    target_dir.mkdir(parents=True, exist_ok=True)
-    file_path = target_dir / file_name
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
-    img.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/{bucket}/{file_name}"
+    package = _save_image_asset_package_bytes(
+        image_bytes,
+        kind=prefix,
+        country=country,
+        service=service,
+        label=label or f"{prefix}_{stamp}",
+    )
+    return str(package["source_url"])
 
 
-def _persist_image_for_library(image_url: str, *, country: str = "") -> str:
+def _persist_image_for_library(
+    image_url: str,
+    *,
+    country: str = "",
+    service: str = "",
+    kind: str = "",
+    label: str = "",
+    original_name: str = "",
+    car_model: str = "",
+    color_name: str = "",
+) -> str:
     normalized_url = str(image_url or "").strip()
     if not normalized_url:
         raise ValueError("image_url is required")
 
-    raw = _read_image_bytes_from_url(normalized_url)
-    source_name = Path(urlparse(normalized_url).path).name
-    safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", source_name).strip("._") or ""
-    if not safe_name:
-        safe_name = f"saved_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-    safe_name = f"{Path(safe_name).stem or 'saved'}.png"
+    existing_package_dir = _library_package_dir_from_url(normalized_url)
+    if existing_package_dir is not None:
+        source_path = existing_package_dir / "source.png"
+        if source_path.exists():
+            return _output_url_for_path(source_path)
 
-    _ensure_output_directories()
-    bucket = _normalize_image_country_bucket(country, fallback="other")
-    target_dir = PERSISTENT_GENERATED_DIR / bucket
-    target_dir.mkdir(parents=True, exist_ok=True)
-    file_path = target_dir / safe_name
-    if not file_path.exists():
-        image = Image.open(BytesIO(raw)).convert("RGB")
-        image.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/{bucket}/{safe_name}"
+    raw = _read_image_bytes_from_url(normalized_url)
+    package = _save_image_asset_package_bytes(
+        raw,
+        kind=kind or _infer_library_kind_from_url(normalized_url),
+        country=country,
+        service=service,
+        label=label,
+        original_name=original_name,
+        source_url=normalized_url,
+        car_model=car_model,
+        color_name=color_name,
+    )
+    return str(package["source_url"])
 
 
 def _is_existing_public_file_url(url: str) -> bool:
@@ -2522,6 +2724,22 @@ def _create_image_thumbnail_url(image_url: str, *, country: str = "") -> str:
         return ""
 
     raw = _read_image_bytes_from_url(normalized_url)
+    package_dir = _library_package_dir_from_url(normalized_url)
+    if package_dir is not None:
+        file_path = package_dir / "thumb.jpg"
+        if not file_path.exists():
+            with Image.open(BytesIO(raw)) as source_image:
+                thumbnail = source_image.convert("RGB")
+                thumbnail.thumbnail((THUMBNAIL_MAX_SIDE, THUMBNAIL_MAX_SIDE), Image.Resampling.LANCZOS)
+                thumbnail.save(
+                    file_path,
+                    format="JPEG",
+                    quality=THUMBNAIL_QUALITY,
+                    optimize=True,
+                    progressive=True,
+                )
+        return _output_url_for_path(file_path)
+
     source_hash = hashlib.sha256(raw).hexdigest()[:20]
     bucket = _normalize_image_country_bucket(country, fallback="other")
     file_name = f"thumb_{source_hash}_{THUMBNAIL_MAX_SIDE}.jpg"
@@ -2641,7 +2859,7 @@ def _extract_gemini_image_bytes(response: dict) -> tuple[Optional[bytes], list[d
     return None, debug_details
 
 
-def generate_image_with_openai(prompt: str, *, country: str = "") -> tuple[str, str]:
+def generate_image_with_openai(prompt: str, *, country: str = "", service: str = "ride-hailing") -> tuple[str, str]:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set")
@@ -2668,11 +2886,11 @@ def generate_image_with_openai(prompt: str, *, country: str = "") -> tuple[str, 
         raise RuntimeError("OpenAI image generation returned no b64_json data")
 
     image_bytes = base64.b64decode(b64_json)
-    local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country)
+    local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country, service=service)
     return local_url, local_url
 
 
-def generate_image_with_recraft(prompt: str, *, country: str = "") -> tuple[str, str]:
+def generate_image_with_recraft(prompt: str, *, country: str = "", service: str = "yango-drive") -> tuple[str, str]:
     api_key = os.getenv("RECRAFT_API_TOKEN") or os.getenv("RECRAFT_API_KEY")
     if not api_key:
         raise RuntimeError("RECRAFT_API_TOKEN (or RECRAFT_API_KEY) is not set")
@@ -2703,10 +2921,10 @@ def generate_image_with_recraft(prompt: str, *, country: str = "") -> tuple[str,
     b64_json = getattr(image, "b64_json", "") or ""
     if b64_json:
         image_bytes = base64.b64decode(b64_json)
-        local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country)
+        local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country, service=service)
         return image_url, local_url
     if image_url:
-        local_url = _save_generated_image_local(image_url)
+        local_url = _save_generated_image_local(image_url, country=country, service=service)
         return image_url, local_url
 
     raise RuntimeError("Recraft returned neither b64_json nor image URL")
@@ -2717,10 +2935,11 @@ def generate_image_with_openai_face_reference(
     face_reference_image_url: str,
     *,
     country: str = "",
+    service: str = "ride-hailing",
 ) -> tuple[str, str]:
     reference_url = str(face_reference_image_url or "").strip()
     if not reference_url:
-        return generate_image_with_openai(prompt, country=country)
+        return generate_image_with_openai(prompt, country=country, service=service)
 
     reference_image = _fetch_image_from_url(reference_url).convert("RGB")
     reference_buf = BytesIO()
@@ -2760,7 +2979,7 @@ def generate_image_with_openai_face_reference(
         raise RuntimeError("OpenAI image generation returned no b64_json data")
 
     image_bytes = base64.b64decode(b64_json)
-    local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country)
+    local_url = _save_generated_image_bytes(image_bytes, prefix="generated", country=country, service=service)
     return local_url, local_url
 
 
@@ -2784,6 +3003,7 @@ def edit_image_with_gemini(
     reference_image_url: str = "",
     aspect_ratio: str = "",
     country: str = "",
+    service: str = "",
 ) -> str:
     # Direct Gemini image editing (Nano Banana family).
     source_image = _fetch_image_from_url(source_image_url).convert("RGB")
@@ -2808,10 +3028,10 @@ def edit_image_with_gemini(
             "Do not call tools or functions. Do not answer with text only."
         ),
     )
-    return _save_generated_image_bytes(image_bytes, prefix="edited", country=country)
+    return _save_generated_image_bytes(image_bytes, prefix="edited", country=country, service=service)
 
 
-def generate_three_d_image_with_gemini(prompt: str, *, country: str = "") -> tuple[str, str]:
+def generate_three_d_image_with_gemini(prompt: str, *, country: str = "", service: str = "3d") -> tuple[str, str]:
     final_prompt = str(prompt or "").strip()
     if not final_prompt:
         raise RuntimeError("prompt is required")
@@ -2845,7 +3065,12 @@ def generate_three_d_image_with_gemini(prompt: str, *, country: str = "") -> tup
             "Use attached images only as visual style references. Do not answer with text only."
         ),
     )
-    local_url = _save_generated_image_bytes(image_bytes, prefix="generated_3d", country=country or "3d")
+    local_url = _save_generated_image_bytes(
+        image_bytes,
+        prefix="generated_3d",
+        country=country or "3d",
+        service=service,
+    )
     return local_url, local_url
 
 
@@ -2861,15 +3086,10 @@ def _download_remote_bytes(url: str) -> bytes:
         return response.read()
 
 
-def _save_generated_image_local(remote_url: str) -> str:
+def _save_generated_image_local(remote_url: str, *, country: str = "", service: str = "") -> str:
     _ensure_output_directories()
     raw = _download_remote_bytes(remote_url)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"generated_{stamp}.png"
-    file_path = GENERATED_DIR / file_name
-    image = Image.open(BytesIO(raw)).convert("RGB")
-    image.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/{file_name}"
+    return _save_generated_image_bytes(raw, prefix="generated", country=country, service=service, label="generated_remote")
 
 
 def _local_public_path_from_url(url: str) -> Optional[Path]:
@@ -3111,10 +3331,11 @@ def _prepare_image_for_uncrop(source_image_url: str, *, country: str = "") -> tu
 
 
 def _is_cached_uncrop_current(image_url: str) -> bool:
-    if not re.search(r"/uncrop/(?:[^/]+/)?uncrop_[0-9a-f]{20}_\d+_\d+_\d+_\d+\.png$", str(image_url or "").strip()):
+    value = str(image_url or "").strip()
+    if not value.startswith("/output/"):
         return False
     try:
-        local_path = _resolve_public_file_path(image_url)
+        local_path = _resolve_public_file_path(value)
         if not local_path.exists():
             return False
         with Image.open(local_path) as cached_image:
@@ -3135,13 +3356,18 @@ def uncrop_image_with_clipdrop(source_image_url: str, *, country: str = "") -> s
     extend_left, extend_right, extend_up, extend_down = _calculate_uncrop_extents(width, height)
     source_hash = hashlib.sha256(raw).hexdigest()[:20]
     _ensure_output_directories()
-    file_name = f"uncrop_{source_hash}_{extend_left}_{extend_right}_{extend_up}_{extend_down}.png"
-    bucket = _normalize_image_country_bucket(country, fallback="other")
-    target_dir = UNCROP_DIR / bucket
+    package_dir = _library_package_dir_from_url(source_image_url)
+    if package_dir is not None:
+        target_dir = package_dir
+        file_name = "uncropped.png"
+    else:
+        file_name = f"uncrop_{source_hash}_{extend_left}_{extend_right}_{extend_up}_{extend_down}.png"
+        bucket = _normalize_image_country_bucket(country, fallback="other")
+        target_dir = UNCROP_DIR / bucket
     target_dir.mkdir(parents=True, exist_ok=True)
     file_path = target_dir / file_name
     if file_path.exists():
-        return f"/output/uncrop/{bucket}/{file_name}"
+        return _output_url_for_path(file_path)
 
     fields = [
         ("extend_left", str(extend_left)),
@@ -3171,60 +3397,72 @@ def uncrop_image_with_clipdrop(source_image_url: str, *, country: str = "") -> s
 
     img = Image.open(BytesIO(uncropped_raw)).convert("RGB")
     img.save(file_path, format="PNG", optimize=True)
-    return f"/output/uncrop/{bucket}/{file_name}"
+    if package_dir is not None:
+        _update_asset_package_manifest(
+            package_dir,
+            {
+                "uncropped_url": _output_url_for_path(file_path),
+                "uncrop_source_hash": source_hash,
+                "uncrop_extents": {
+                    "left": extend_left,
+                    "right": extend_right,
+                    "up": extend_up,
+                    "down": extend_down,
+                },
+            },
+        )
+    return _output_url_for_path(file_path)
 
 
 def _normalize_upload_bucket(service: str) -> str:
     return "uploaded-drive" if _normalize_service_key(service) == "yango-drive" else "uploaded"
 
 
-def _save_uploaded_data_url(data_url: str, original_name: str = "", service: str = "") -> str:
+def _save_uploaded_data_url(data_url: str, original_name: str = "", service: str = "", country: str = "") -> str:
     match = re.match(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.+)$", data_url, re.DOTALL)
     if not match:
         raise ValueError("Invalid image data URL")
 
     mime_type = match.group(1).lower()
     b64_part = match.group(2)
-    ext_map = {
-        "image/jpeg": "jpg",
-        "image/jpg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-    }
-    ext = ext_map.get(mime_type, "png")
+    if mime_type not in {"image/jpeg", "image/jpg", "image/png", "image/webp"}:
+        raise ValueError("Unsupported image type")
 
     raw = base64.b64decode(b64_part)
-    image = Image.open(BytesIO(raw)).convert("RGB")
+    with Image.open(BytesIO(raw)) as source_image:
+        normalized = BytesIO()
+        source_image.convert("RGB").save(normalized, format="PNG", optimize=True)
+    upload_service = _normalize_upload_service(service)
+    upload_country = country or ("Uploaded Drive" if upload_service == "yango-drive" else "Uploaded")
+    package = _save_image_asset_package_bytes(
+        normalized.getvalue(),
+        kind="uploaded",
+        country=upload_country,
+        service=upload_service,
+        label=Path(original_name).stem if original_name else "upload",
+        original_name=original_name,
+    )
+    return str(package["source_url"])
 
-    _ensure_output_directories()
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    stem = Path(original_name).stem if original_name else "upload"
-    safe_stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_") or "upload"
-    file_name = f"{safe_stem}_{stamp}.{ext}"
-    bucket = _normalize_upload_bucket(service)
-    target_dir = GENERATED_DIR / bucket
-    target_dir.mkdir(parents=True, exist_ok=True)
-    file_path = target_dir / file_name
-    image.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/{bucket}/{file_name}"
 
-
-def _save_uploaded_file_bytes(file_bytes: bytes, original_name: str = "", service: str = "") -> str:
+def _save_uploaded_file_bytes(file_bytes: bytes, original_name: str = "", service: str = "", country: str = "") -> str:
     if not file_bytes:
         raise ValueError("Uploaded image is empty")
 
-    image = Image.open(BytesIO(file_bytes)).convert("RGB")
-    _ensure_output_directories()
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    stem = Path(original_name).stem if original_name else "upload"
-    safe_stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_") or "upload"
-    file_name = f"{safe_stem}_{stamp}.png"
-    bucket = _normalize_upload_bucket(service)
-    target_dir = GENERATED_DIR / bucket
-    target_dir.mkdir(parents=True, exist_ok=True)
-    file_path = target_dir / file_name
-    image.save(file_path, format="PNG", optimize=True)
-    return f"/output/generated/{bucket}/{file_name}"
+    with Image.open(BytesIO(file_bytes)) as source_image:
+        normalized = BytesIO()
+        source_image.convert("RGB").save(normalized, format="PNG", optimize=True)
+    upload_service = _normalize_upload_service(service)
+    upload_country = country or ("Uploaded Drive" if upload_service == "yango-drive" else "Uploaded")
+    package = _save_image_asset_package_bytes(
+        normalized.getvalue(),
+        kind="uploaded",
+        country=upload_country,
+        service=upload_service,
+        label=Path(original_name).stem if original_name else "upload",
+        original_name=original_name,
+    )
+    return str(package["source_url"])
 
 
 def _save_uploaded_video_bytes(file_bytes: bytes, original_name: str = "") -> str:
@@ -5938,7 +6176,12 @@ class Handler(SimpleHTTPRequestHandler):
                     upload_country = _form_text_value(form, "country")
                     if not upload_country:
                         upload_country = "Uploaded Drive" if upload_service == "yango-drive" else "Uploaded"
-                    local_url = _save_uploaded_file_bytes(file_bytes, file_name, service=upload_service)
+                    local_url = _save_uploaded_file_bytes(
+                        file_bytes,
+                        file_name,
+                        service=upload_service,
+                        country=upload_country,
+                    )
                     library_image = _upsert_image_library_record(
                         local_url,
                         kind="uploaded",
@@ -6013,7 +6256,11 @@ class Handler(SimpleHTTPRequestHandler):
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "description is required"})
                         return
                     prompt = generate_three_d_prompt_with_openai(prompt_source)
-                    image_url, local_image_url = generate_three_d_image_with_gemini(prompt, country=country or "3d")
+                    image_url, local_image_url = generate_three_d_image_with_gemini(
+                        prompt,
+                        country=country or "3d",
+                        service="3d",
+                    )
                     library_image = _upsert_image_library_record(
                         local_image_url,
                         kind=_infer_library_kind_from_url(local_image_url),
@@ -6052,7 +6299,11 @@ class Handler(SimpleHTTPRequestHandler):
                         city=city,
                         drive_wish=drive_wish,
                     )
-                    image_url, local_image_url = generate_image_with_recraft(prompt, country=country)
+                    image_url, local_image_url = generate_image_with_recraft(
+                        prompt,
+                        country=country,
+                        service="yango-drive",
+                    )
                     library_image = _upsert_image_library_record(
                         local_image_url,
                         kind=_infer_library_kind_from_url(local_image_url),
@@ -6104,9 +6355,14 @@ class Handler(SimpleHTTPRequestHandler):
                         prompt,
                         face_reference_image_url,
                         country=country,
+                        service="ride-hailing",
                     )
                 else:
-                    image_url, local_image_url = generate_image_with_openai(prompt, country=country)
+                    image_url, local_image_url = generate_image_with_openai(
+                        prompt,
+                        country=country,
+                        service="ride-hailing",
+                    )
                 library_image = _upsert_image_library_record(
                     local_image_url,
                     kind=_infer_library_kind_from_url(local_image_url),
@@ -6226,7 +6482,12 @@ class Handler(SimpleHTTPRequestHandler):
                 upload_country = str(body.get("country", "")).strip()
                 if not upload_country:
                     upload_country = "Uploaded Drive" if upload_service == "yango-drive" else "Uploaded"
-                local_url = _save_uploaded_data_url(image_data, file_name, service=upload_service)
+                local_url = _save_uploaded_data_url(
+                    image_data,
+                    file_name,
+                    service=upload_service,
+                    country=upload_country,
+                )
                 library_image = _upsert_image_library_record(
                     local_url,
                     kind="uploaded",
@@ -6243,7 +6504,11 @@ class Handler(SimpleHTTPRequestHandler):
                 if not prompt:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "prompt is required"})
                     return
-                image_url, local_image_url = generate_image_with_openai(prompt, country=str(body.get("country", "")).strip())
+                image_url, local_image_url = generate_image_with_openai(
+                    prompt,
+                    country=str(body.get("country", "")).strip(),
+                    service=_normalize_upload_service(str(body.get("service", "ride-hailing")).strip()),
+                )
                 self._send_json(
                     HTTPStatus.OK,
                     {
@@ -6271,6 +6536,7 @@ class Handler(SimpleHTTPRequestHandler):
                     reference_image_url,
                     aspect_ratio=aspect_ratio,
                     country=str(body.get("country", "")).strip(),
+                    service=_normalize_upload_service(str(body.get("service", "ride-hailing")).strip()),
                 )
                 self._send_json(HTTPStatus.OK, {"image_local_url": edited_local_url})
                 return
@@ -6311,6 +6577,7 @@ class Handler(SimpleHTTPRequestHandler):
             image_url = str(body.get("imageUrl", "")).strip()
             banner_source_url = str(body.get("bannerSourceUrl", "")).strip()
             country = str(body.get("country", "")).strip()
+            requested_service = _normalize_service_key(str(body.get("service", "")).strip())
             text_sets = body.get("textSets", [])
             if not isinstance(text_sets, list):
                 text_sets = []
@@ -6448,6 +6715,38 @@ class Handler(SimpleHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "imageUrl is required"})
                 return
 
+            source_record = get_image_library_record(image_url)
+            source_kind = str((source_record or {}).get("kind") or _infer_library_kind_from_url(image_url)).strip()
+            source_service = str((source_record or {}).get("service", "")).strip()
+            library_service = (
+                source_service
+                or (requested_service if requested_service in {"ride-hailing", "yango-drive"} else "")
+                or ("yango-drive" if _normalize_brand_key(brand) == "yango-drive" else "ride-hailing")
+            )
+            library_country = country or str((source_record or {}).get("country", "")).strip()
+            if not library_country:
+                if library_service == "yango-drive":
+                    library_country = "Uploaded Drive" if source_kind == "uploaded" else "other"
+                elif source_kind == "uploaded":
+                    library_country = "Uploaded"
+                else:
+                    library_country = "other"
+            persisted_image_url = _persist_image_for_library(
+                image_url,
+                country=library_country,
+                service=library_service,
+                kind=source_kind,
+                label=str((source_record or {}).get("label", "")).strip(),
+                original_name=str((source_record or {}).get("original_name", "")).strip()
+                or Path(urlparse(image_url).path).name,
+                car_model=str((source_record or {}).get("car_model", "")).strip(),
+                color_name=str((source_record or {}).get("color_name", "")).strip(),
+            )
+            if persisted_image_url != image_url:
+                packaged_record = get_image_library_record(persisted_image_url)
+                banner_source_url = str((packaged_record or {}).get("banner_source_url", "")).strip()
+            image_url = persisted_image_url
+
             banners, effective_image_url, uncrop_warning, uncrop_debug = render_banner_images(
                 image_url=image_url,
                 text_sets=text_sets,
@@ -6465,25 +6764,13 @@ class Handler(SimpleHTTPRequestHandler):
             if not banners:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "No supported sizes provided"})
                 return
-            source_record = get_image_library_record(image_url)
-            source_kind = str((source_record or {}).get("kind") or _infer_library_kind_from_url(image_url)).strip()
-            source_service = str((source_record or {}).get("service", "")).strip()
-            library_country = country or str((source_record or {}).get("country", "")).strip()
-            if not library_country:
-                if source_service == "yango-drive":
-                    library_country = "Uploaded Drive"
-                elif source_kind == "uploaded":
-                    library_country = "Uploaded"
-                else:
-                    library_country = "other"
-            persisted_image_url = _persist_image_for_library(image_url, country=library_country)
             banner_source_for_library = effective_image_url if _is_cached_uncrop_current(effective_image_url) else ""
             library_image = _upsert_image_library_record(
                 persisted_image_url,
-                kind=_infer_library_kind_from_url(persisted_image_url),
+                kind=source_kind or _infer_library_kind_from_url(persisted_image_url),
                 banner_source_url=banner_source_for_library,
                 country=library_country,
-                service=source_service or ("yango-drive" if _normalize_brand_key(brand) == "yango-drive" else "ride-hailing"),
+                service=library_service,
                 original_name=Path(urlparse(persisted_image_url).path).name,
             )
             self._send_json(
