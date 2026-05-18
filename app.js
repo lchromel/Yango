@@ -1,4 +1,4 @@
-const VEHICLE_DATA_URL = "./assets/data/vehicles.json?v=20260513-cis";
+const VEHICLE_DATA_URL = "./assets/data/vehicles.json?v=20260518-turkey";
 const SERVICE_OPTIONS = [
   { label: "Ride-hailing", value: "ride-hailing" },
   { label: "Yango Drive", value: "yango-drive" },
@@ -766,6 +766,7 @@ function getBrandingReferenceUrl() {
   if (!state.imageUrl || !transport) return "";
   if ((transport.vehicleType || "car") !== "car") return "";
   if (state.selectedCountry === "UAE") return "";
+  if (state.selectedCountry === "Turkey") return "";
   if (isBusinessClassTransport(transport)) return "";
 
   let referenceKey = COUNTRY_BRANDING_REFERENCE[state.selectedCountry] || "english";

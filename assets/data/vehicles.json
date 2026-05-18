@@ -1191,6 +1191,27 @@
       ]
     },
     {
+      "country": "Turkey",
+      "tariffs": [
+        {
+          "label": "Economy",
+          "basicClass": "Econom",
+          "tariffCode": "econom",
+          "model": "2018 Hyundai Accent",
+          "vehicleType": "car",
+          "colorName": "yellow"
+        },
+        {
+          "label": "Comfort",
+          "basicClass": "Comfort",
+          "tariffCode": "business",
+          "model": "2018 Toyota Corolla",
+          "vehicleType": "car",
+          "colorName": "yellow"
+        }
+      ]
+    },
+    {
       "country": "UAE",
       "tariffs": [
         {
