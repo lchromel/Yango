@@ -3345,7 +3345,40 @@ def _is_cached_uncrop_current(image_url: str) -> bool:
         return False
 
 
-def uncrop_image_with_clipdrop(source_image_url: str, *, country: str = "") -> str:
+def _co_locate_uncrop_with_package(source_image_url: str, uncrop_url: str) -> str:
+    normalized_uncrop_url = str(uncrop_url or "").strip()
+    if not normalized_uncrop_url or not _is_cached_uncrop_current(normalized_uncrop_url):
+        return normalized_uncrop_url
+
+    package_dir = _library_package_dir_from_url(source_image_url)
+    if package_dir is None:
+        return normalized_uncrop_url
+
+    package_uncrop_path = package_dir / "uncropped.png"
+    package_uncrop_url = _output_url_for_path(package_uncrop_path)
+    if normalized_uncrop_url == package_uncrop_url:
+        return normalized_uncrop_url
+
+    uncrop_path = _resolve_public_file_path(normalized_uncrop_url)
+    package_dir.mkdir(parents=True, exist_ok=True)
+    if not package_uncrop_path.exists():
+        shutil.copy2(uncrop_path, package_uncrop_path)
+    _update_asset_package_manifest(
+        package_dir,
+        {
+            "uncropped_url": package_uncrop_url,
+            "migrated_uncrop_url": normalized_uncrop_url,
+        },
+    )
+    return package_uncrop_url
+
+
+def uncrop_image_with_clipdrop(
+    source_image_url: str,
+    *,
+    country: str = "",
+    package_image_url: str = "",
+) -> str:
     clipdrop_key = os.getenv("CLIPDROP_API_KEY")
     if not clipdrop_key:
         raise RuntimeError("CLIPDROP_API_KEY is not set")
@@ -3356,7 +3389,7 @@ def uncrop_image_with_clipdrop(source_image_url: str, *, country: str = "") -> s
     extend_left, extend_right, extend_up, extend_down = _calculate_uncrop_extents(width, height)
     source_hash = hashlib.sha256(raw).hexdigest()[:20]
     _ensure_output_directories()
-    package_dir = _library_package_dir_from_url(source_image_url)
+    package_dir = _library_package_dir_from_url(package_image_url) or _library_package_dir_from_url(source_image_url)
     if package_dir is not None:
         target_dir = package_dir
         file_name = "uncropped.png"
@@ -3402,6 +3435,7 @@ def uncrop_image_with_clipdrop(source_image_url: str, *, country: str = "") -> s
             package_dir,
             {
                 "uncropped_url": _output_url_for_path(file_path),
+                "uncrop_input_url": str(source_image_url or "").strip(),
                 "uncrop_source_hash": source_hash,
                 "uncrop_extents": {
                     "left": extend_left,
@@ -5966,13 +6000,19 @@ def render_banner_images(
         uncrop_country = "uploaded" if source_kind == "uploaded" else (country or cached_country or "other")
         try:
             if cached_banner_source_url and _is_cached_uncrop_current(cached_banner_source_url):
-                effective_image_url = cached_banner_source_url
+                effective_image_url = _co_locate_uncrop_with_package(image_url, cached_banner_source_url)
+                if effective_image_url != cached_banner_source_url:
+                    update_image_library_banner_source(image_url, effective_image_url)
                 uncrop_debug["used_cache"] = True
             else:
                 prepared_image_url, preprocess_debug = _prepare_image_for_uncrop(image_url, country=uncrop_country)
                 uncrop_debug["preprocess"] = preprocess_debug
                 uncrop_debug["attempted"] = True
-                effective_image_url = uncrop_image_with_clipdrop(prepared_image_url, country=uncrop_country)
+                effective_image_url = uncrop_image_with_clipdrop(
+                    prepared_image_url,
+                    country=uncrop_country,
+                    package_image_url=image_url,
+                )
                 update_image_library_banner_source(image_url, effective_image_url)
             uncrop_debug["output_url"] = effective_image_url
             source_image = _fetch_image_from_url(effective_image_url)
